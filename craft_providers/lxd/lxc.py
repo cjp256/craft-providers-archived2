@@ -33,7 +33,7 @@ class LXC:  # pylint: disable=too-many-public-methods
     def __init__(
         self,
         *,
-        lxc_path: pathlib.Path = pathlib.Path("/snap/bin/lxc"),
+        lxc_path: Optional[pathlib.Path] = None,
     ):
         if lxc_path is None:
             self.lxc_path: pathlib.Path = pathlib.Path("lxc")

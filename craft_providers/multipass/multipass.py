@@ -15,23 +15,24 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import io
+import json
 import logging
 import pathlib
 import shlex
 import subprocess
-from typing import IO, Dict, List, Optional
+from typing import IO, Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class MultipassError:
-    def __init__(self, *, command: str, returncode: int, reason: str) -> None:
+    def __init__(self, *, command: str, returncode: int, msg: str) -> None:
         self.command = command
         self.returncode = returncode
-        self.reason = reason
+        self.msg = msg
 
     def __str__(self) -> str:
-        return self.reason
+        return self.msg
 
 
 class Multipass:
@@ -54,7 +55,7 @@ class Multipass:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
     ) -> subprocess.CompletedProcess:
-        """Execute command in instance, allowing output to console."""
+        """Execute command in instance_name, allowing output to console."""
         command = [str(self.multipass_path), *command]
         quoted = " ".join([shlex.quote(c) for c in command])
 
@@ -75,47 +76,51 @@ class Multipass:
 
         return proc
 
-    def delete(self, *, instance: str, purge=True) -> None:
+    def delete(self, *, instance_name: str, purge=True) -> None:
         """Passthrough for running multipass delete.
 
-        :param instance: The name of the instance to delete.
-        :param purge: Flag to purge the instance's image after deleting.
+        :param instance_name: The name of the instance_name to delete.
+        :param purge: Flag to purge the instance_name's image after deleting.
 
         :raises subprocess.CalledProcessError: on error.
 
         """
-        command = ["delete", instance]
+        command = ["delete", instance_name]
         if purge:
             command.append("--purge")
 
         self._run(command)
 
-    def execute(
+    def exec(
         self,
         *,
         command: List[str],
-        instance: str,
+        instance_name: str,
         runner=subprocess.run,
         **kwargs,
     ):
-        """Execute command in instance with specified runner."""
-        run_command = [str(self.multipass_path), "exec", instance, "--", *command]
+        """Execute command in instance_name with specified runner.
+
+        :param command: Command to execute in the instance.
+        :param instance_name: Name of instance to execute in.
+
+        :returns: Runner's instance.
+        """
+        run_command = [str(self.multipass_path), "exec", instance_name, "--", *command]
 
         quoted = " ".join([shlex.quote(c) for c in command])
         logger.warning("Executing in VM: %s", quoted)
 
         return runner(run_command, **kwargs)  # pylint: disable=subprocess-run-check
 
-    def info(self, *, instance: str, output_format: str = None) -> Optional[bytes]:
+    def info(self, *, instance_name: str) -> Optional[Dict[str, Any]]:
         """Passthrough for running multipass info.
 
         :returns: Data from stdout if instance exists, else None.
 
         :raises MultipassError: On error.
         """
-        command = ["info", instance]
-        if output_format is not None:
-            command.extend(["--format", output_format])
+        command = ["info", instance_name, "--format", "json"]
 
         try:
             proc = self._run(command)
@@ -126,36 +131,31 @@ class Multipass:
             raise MultipassError(
                 command=error.command,
                 exit_code=error.returncode,
-                reason=f"Failed to query info for VM {instance!r}.",
+                msg=f"Failed to query info for VM {instance_name!r}.",
             ) from error
 
-        return proc.stdout
+        return json.loads(proc.stdout)
 
     def launch(
         self,
         *,
-        instance: str,
+        instance_name: str,
         image: str,
         cpus: str = None,
         mem: str = None,
         disk: str = None,
-        remote: str = None,
     ) -> None:
         """Launch multipass VM.
 
-        :param instance: the name the launched instance will have.
-        :param image: the image to create the instance with.
-        :param cpus: amount of virtual CPUs to assign to the launched instance.
-        :param mem: amount of RAM to assign to the launched instance.
-        :param disk: amount of disk space the instance will see.
-        :param remote: the remote server to retrieve the image from.
+        :param instance_name: The name the launched instance_name will have.
+        :param image: Name of image to create the instance with.
+        :param cpus: Amount of virtual CPUs to assign to the launched instance_name.
+        :param mem: Amount of RAM to assign to the launched instance_name.
+        :param disk: Amount of disk space the instance_name will see.
 
         :raises subprocess.CalledProcessError: on error.
         """
-        if remote is not None:
-            image = "{}:{}".format(remote, image)
-
-        command = ["launch", image, "--name", instance]
+        command = ["launch", image, "--name", instance_name]
         if cpus is not None:
             command.extend(["--cpus", cpus])
         if mem is not None:
@@ -169,17 +169,17 @@ class Multipass:
             raise MultipassError(
                 command=error.command,
                 exit_code=error.returncode,
-                reason=f"Failed to launch VM {instance!r}.",
+                msg=f"Failed to launch VM {instance_name!r}.",
             ) from error
 
-    def start(self, *, instance: str) -> None:
+    def start(self, *, instance_name: str) -> None:
         """Passthrough for running multipass start.
 
-        :param instance: the name of the instance to start.
+        :param instance_name: the name of the instance to start.
 
         :raises subprocess.CalledProcessError: on error.
         """
-        command = ["start", instance]
+        command = ["start", instance_name]
 
         try:
             self._run(command, check=True)
@@ -187,15 +187,15 @@ class Multipass:
             raise MultipassError(
                 command=error.command,
                 exit_code=error.returncode,
-                reason=f"Failed to start VM {instance!r}.",
+                msg=f"Failed to start VM {instance_name!r}.",
             ) from error
 
-    def stop(self, *, instance: str, time: int = None) -> None:
+    def stop(self, *, instance_name: str, time: int = None) -> None:
         """Passthrough for running multipass stop.
 
-        :param instance: the name of the instance to stop.
+        :param instance_name: the name of the instance_name to stop.
         :param time: time from now, in minutes, to delay shutdown of the
-            instance.
+            instance_name.
 
         :raises subprocess.CalledProcessError: on error.
         """
@@ -203,7 +203,7 @@ class Multipass:
 
         if time:
             command.extend(["--time", str(time)])
-        command.append(instance)
+        command.append(instance_name)
 
         try:
             self._run(command)
@@ -211,40 +211,40 @@ class Multipass:
             raise MultipassError(
                 command=error.command,
                 exit_code=error.returncode,
-                reason=f"Failed to stop VM {instance!r}.",
+                msg=f"Failed to stop VM {instance_name!r}.",
             ) from error
 
     def mount(
         self,
         *,
-        source: str,
+        source: pathlib.Path,
         target: str,
         uid_map: Dict[str, str] = None,
         gid_map: Dict[str, str] = None,
     ) -> None:
         """Passthrough for running multipass mount.
 
-        :param source: path to the local directory to mount.
-        :param target: mountpoint inside the instance in the form of
-                           <instance-name>:path.
+        :param source: Path of local directory to mount.
+        :param target: Target mount points, in <name>[:<path>] format, where
+            <name> is an instance name, and optional <path> is the mount point.
+            If omitted, the mount point will be the same as the source's
+            absolute path.
         :param uid_map: A mapping of user IDs for use in the mount of the form
-                             <host-id> -> <instance-id>.
-                             File and folder ownership will be mapped from
-                             <host> to <instance-name> inside the instance.
+            <host-id> -> <instance-name-id>.  File and folder ownership will be
+            mapped from <host> to <instance-name> inside the instance_name.
         :param gid_map: A mapping of group IDs for use in the mount of the form
-                             <host-id> -> <instance-id>.
-                             File and folder ownership will be mapped from
-                             <host> to <instance-name> inside the instance.
+            <host-id> -> <instance-name-id>.  File and folder ownership will be
+            mapped from <host> to <instance-name> inside the instance_name.
         """
-        command = ["mount", source, target]
-        if uid_map is None:
-            uid_map = dict()
-        for host_map, instance_map in uid_map.items():
-            command.extend(["--uid-map", "{}:{}".format(host_map, instance_map)])
-        if gid_map is None:
-            gid_map = dict()
-        for host_map, instance_map in gid_map.items():
-            command.extend(["--gid-map", "{}:{}".format(host_map, instance_map)])
+        command = ["mount", str(source), target]
+
+        if uid_map is not None:
+            for host_id, instance_id in uid_map.items():
+                command.extend(["--uid-map", f"{host_id}:{instance_id}"])
+
+        if gid_map is not None:
+            for host_id, instance_id in gid_map.items():
+                command.extend(["--gid-map", f"{host_id}:{instance_id}"])
 
         try:
             self._run(command)
@@ -252,30 +252,31 @@ class Multipass:
             raise MultipassError(
                 command=error.command,
                 exit_code=error.returncode,
-                reason=f"Failed to mount {source!r} to {target!r}.",
+                msg=f"Failed to mount {source!r} to {target!r}.",
             ) from error
 
-    def shell(self, *, instance: str) -> None:
+    def shell(self, *, instance_name: str) -> None:
         """Passthrough for running multipass shell.
 
-        :param instance: the name of the instance to execute command.
+        :param instance_name: the name of the instance_name to execute command.
 
         :raises MultipassError: On error.
         """
         try:
-            self._run(["shell", instance], stdin=None, stdout=None, stderr=None)
+            self._run(["shell", instance_name], stdin=None, stdout=None, stderr=None)
         except subprocess.CalledProcessError as error:
             raise MultipassError(
                 command=error.command,
                 exit_code=error.returncode,
-                reason="Failed to execute shell.",
+                msg="Failed to execute shell.",
             ) from error
 
     def umount(self, *, mount: str) -> None:
         """Passthrough for running multipass mount.
 
-        :param mount: mountpoint inside the instance in the form of
-                           <instance-name>:path to unmount.
+        :param mount: Mount point in <name>[:<path>] format, where <name> are
+            instance names, and optional <path> are mount points.  If omitted,
+            all mounts will be removed from the name instance.
 
         :raises MultipassError: On error.
         """
@@ -285,17 +286,38 @@ class Multipass:
             raise MultipassError(
                 command=error.command,
                 exit_code=error.returncode,
-                reason=f"Failed to unmount {mount!r}.",
+                msg=f"Failed to unmount {mount!r}.",
+            ) from error
+
+    def transfer(self, *, source: str, destination: str, bufsize: int = 4096) -> None:
+        """Transer to destination path with source IO.
+
+        :param source: The source path, prefixed with <name:> for a path inside
+            the instance.
+        :param destination: The destination path, prefixed with <name:> for a
+            path inside the instance.
+
+        :raises MultipassError: On error.
+        """
+        command = [str(self.multipass_command), "transfer", source, destination]
+
+        try:
+            self._run(command)
+        except subprocess.CalledProcessError as error:
+            raise MultipassError(
+                command=error.command,
+                exit_code=error.returncode,
+                msg=f"Failed to transer {source!r} to {destination!r}.",
             ) from error
 
     def transfer_from_io(
-        self, *, source: IO, destination: str, bufsize: int = 1024
+        self, *, source: IO, destination: str, bufsize: int = 4096
     ) -> None:
         """Transer to destination path with source IO.
 
-        :param source: a file-like object to read from
-        :param destination: the destination of the copied file, using syntax
-            expected by multipass
+        :param source: An IO stream to read from.
+        :param destination: The destination path, prefixed with <name:> for a
+            path inside the instance.
 
         :raises MultipassError: On error.
         """
@@ -326,7 +348,7 @@ class Multipass:
                 raise MultipassError(
                     command=command,
                     exit_code=proc.returncode,
-                    reason=f"Failed to transer file {destination!r} to source.",
+                    msg=f"Failed to transer file {destination!r} to source.",
                 )
 
     def transfer_to_io(
@@ -334,9 +356,9 @@ class Multipass:
     ) -> None:
         """Transer from source file to destination IO.
 
-        :param source: The source file to copy, using syntax expected by
-            multipass.
-        :param destination: File-like object to write to.
+        :param source: The source path, prefixed with <name:> for a path inside
+            the instance.
+        :param destination: An IO stream to write to.
 
         :raises MultipassError: On error.
         """
@@ -375,5 +397,5 @@ class Multipass:
                 raise MultipassError(
                     command=command,
                     exit_code=proc.returncode,
-                    reason=f"Failed to transer file {source!r} to destination.",
+                    msg=f"Failed to transer file {source!r} to destination.",
                 )

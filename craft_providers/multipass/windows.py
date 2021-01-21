@@ -67,7 +67,7 @@ def _calculate_file_sha3_384_hash(
     return m.hexdigest()
 
 
-def windows_reload_multipass_path_env(winreg_module=winreg):
+def reload_multipass_path_env(winreg_module=winreg):
     """Update PATH to include installed Multipass, if not already set."""
 
     assert sys.platform == "win32"
@@ -123,7 +123,7 @@ def _run_installer(installer: pathlib.Path):
         ) from error
 
     # Reload path environment to see if we can find multipass now.
-    windows_reload_multipass_path_env()
+    reload_multipass_path_env()
 
     if not shutil.which("multipass.exe"):
         raise MultipassWindowsInstallError("installation did not complete successfully")
@@ -214,7 +214,7 @@ def _download_multipass(dl_dir: pathlib.Path, chunk_size: int = 32 * 1024) -> st
     return dl_path
 
 
-def windows_install_multipass() -> None:
+def install_multipass() -> None:
     """Download and install multipass."""
     assert sys.platform == "win32"
 
