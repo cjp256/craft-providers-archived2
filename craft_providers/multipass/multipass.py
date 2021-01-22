@@ -333,15 +333,14 @@ class Multipass:
     ) -> None:
         """Transer to destination path with source IO.
 
+        Note that this can't use std{in,out}=open(...) due to LP #1849753.
+
         :param source: An IO stream to read from.
         :param destination: The destination path, prefixed with <name:> for a
             path inside the instance.
 
         :raises MultipassError: On error.
         """
-        assert isinstance(source, io.IOBase)
-
-        # Cannot use std{in,out}=open(...) due to LP #1849753.
         command = [str(self.multipass_path), "transfer", "-", destination]
         proc = subprocess.Popen(command, stdin=subprocess.PIPE)
 
@@ -380,15 +379,14 @@ class Multipass:
     ) -> None:
         """Transer from source file to destination IO.
 
+        Note that this can't use std{in,out}=open(...) due to LP #1849753.
+
         :param source: The source path, prefixed with <name:> for a path inside
             the instance.
         :param destination: An IO stream to write to.
 
         :raises MultipassError: On error.
         """
-        assert isinstance(destination, io.IOBase)
-
-        # can't use std{in,out}=open(...) due to LP#1849753
         command = [str(self.multipass_path), "transfer", source, "-"]
         proc = subprocess.Popen(
             command,
