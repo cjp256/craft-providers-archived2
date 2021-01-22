@@ -15,6 +15,7 @@
 """Multipass Instance."""
 import io
 import logging
+import os
 import pathlib
 import subprocess
 from typing import Any, Dict, List, Optional
@@ -40,16 +41,21 @@ class MultipassInstance(Executor):
         self,
         *,
         name: str,
+        host_gid: int = os.getuid(),
+        host_uid: int = os.getgid(),
         multipass: Optional[Multipass] = None,
     ):
         super().__init__()
+
+        self.name = name
+
+        self._host_gid = host_gid
+        self._host_uid = host_uid
 
         if multipass is None:
             self.multipass = Multipass()
         else:
             self.multipass = multipass
-
-        self.name = name
 
     def create_file(
         self,
@@ -152,8 +158,10 @@ class MultipassInstance(Executor):
     def get_info(self) -> Optional[Dict[str, Any]]:
         """Get configuration and state for instance.
 
-        :returns: State information parsed from multipass if instance exists, else
-            None.
+        :returns: State information parsed from multipass if instance exists,
+            else None.
+
+        :raises MultipassInstanceError: If unable to parse VM info.
         """
         instance_config = self.multipass.info(instance_name=self.name)
         if instance_config is None:
@@ -177,9 +185,9 @@ class MultipassInstance(Executor):
         mounts = info.get("mounts")
 
         for mount_point, mount_config in mounts.items():
-            if key == destination.as_posix() and mount_config.get("source_path") == str(
-                source
-            ):
+            if mount_point == destination.as_posix() and mount_config.get(
+                "source_path"
+            ) == str(source):
                 return True
 
         return False
@@ -189,7 +197,7 @@ class MultipassInstance(Executor):
 
         :returns: True if instance is running.
         """
-        state = self.get_state()
+        state = self.get_info()
         if state is None:
             return False
 
@@ -199,10 +207,9 @@ class MultipassInstance(Executor):
         self,
         *,
         image: str,
-        instance_cpus: int = 2,
-        instance_disk_gb: int = 256,
-        instance_mem_gb: int = 2,
-        instance_name: str,
+        cpus: int = 2,
+        disk_gb: int = 256,
+        mem_gb: int = 2,
     ) -> None:
         """Launch instance.
 
@@ -217,9 +224,9 @@ class MultipassInstance(Executor):
         self.multipass.launch(
             instance_name=self.name,
             image=image,
-            cpus=str(instance_cpus),
-            disk=f"{instance_disk_gb!s}G",
-            mem=f"{instance_mem_gb!s}G",
+            cpus=str(cpus),
+            disk=f"{disk_gb!s}G",
+            mem=f"{mem_gb!s}G",
         )
 
     def mount(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
@@ -232,6 +239,20 @@ class MultipassInstance(Executor):
         """
         if self.is_mounted(source=source, destination=destination):
             return
+
+        if self._platform != "win32":
+            uid_map = {str(self._host_uid): "0"}
+            gid_map = {str(self._host_gid): "0"}
+        else:
+            uid_map = {"0": "0"}
+            gid_map = {"0": "0"}
+
+        self._multipass_cmd.mount(
+            source=source,
+            target=f"{self.name}:{destination.as_posix()}",
+            uid_map=uid_map,
+            gid_map=gid_map,
+        )
 
         self.multipass.config_device_add_disk(
             instance_name=self.name,
