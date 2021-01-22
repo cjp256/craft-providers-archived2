@@ -26,8 +26,15 @@ from craft_providers.util import path, prompt
 logger = logging.getLogger(__name__)
 
 
-def MultipassInstallerError(Exception):
+class MultipassInstallerError(Exception):
+    """Multipass Installation Error.
+
+    :param reason: Reason for install failure.
+    """
+
     def __init__(self, reason: str) -> None:
+        super().__init__()
+
         self.reason = reason
 
     def __str__(self) -> str:
@@ -47,9 +54,9 @@ class MultipassInstaller:
         self._input_handler = input_handler
 
         if multipass_path is None:
-            self.multipass_path = self._find_multipass()
+            self._multipass_path = self._find_multipass()
         else:
-            self.multipass_path = multipass_path
+            self._multipass_path = multipass_path
 
         self._platform = platform
 
@@ -58,8 +65,13 @@ class MultipassInstaller:
 
         :raises MultipassInstallerError: if unsupported.
         """
+        assert self._multipass_path is not None
+
+        # Make sure Multipass is ready first.
+        self._install_wait_ready()
+
         proc = subprocess.run(
-            [str(self.multipass_path), "version"],
+            [str(self._multipass_path), "version"],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -106,12 +118,14 @@ class MultipassInstaller:
 
         return None
 
-    def _setup_wait_ready(
+    def _install_wait_ready(
         self, retry_interval: float = 1.0, retry_count: int = 120
     ) -> None:
+        assert self._multipass_path is not None
+
         while retry_count > 0:
             proc = subprocess.run(
-                [self.multipass_path, "version"],
+                [self._multipass_path, "version"],
                 check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -123,46 +137,52 @@ class MultipassInstaller:
             retry_count -= 1
             sleep(retry_interval)
 
-    def _setup_darwin(self) -> None:
+    def _install_darwin(self) -> None:
         try:
             subprocess.run(["brew", "cask", "install", "multipass"], check=True)
         except subprocess.CalledProcessError as error:
             raise MultipassInstallerError("error during brew installation") from error
 
-    def _setup_linux(self) -> None:
+    def _install_linux(self) -> None:
         try:
             subprocess.run(["sudo", "snap", "install", "multipass"], check=True)
         except subprocess.CalledProcessError as error:
             raise MultipassInstallerError("error during snap installation") from error
 
-    def _setup_windows(self) -> None:
+    def _install_windows(self) -> None:
+        # Ensure Windows PATH is up to date.
+        # windows.reload_multipass_path_env()
         raise MultipassInstallerError("Windows not yet supported")
 
-    def setup(self) -> None:
+    def install(self) -> pathlib.Path:
         """Ensure Multipass is installed with required version.
 
         :raises MultipassInstallerError: if unsupported.
         """
-        if not self.multipass_path.exists():
-            if not prompt.input_bool(
+        assert self._multipass_path is not None
+
+        if not self._multipass_path.exists():
+            if not prompt.input_prompt_bool(
                 "Multipass needs to be installed.  Install now?",
                 default=False,
-                require_valid=True,
+                retry_invalid=True,
             ):
                 raise MultipassInstallerError("user declined to install")
 
-            subprocess.run(["sudo", "snap", "install", "multipass"], check=True)
+            if self._platform == "darwin":
+                self._install_darwin()
+            elif self._platform == "linux":
+                self._install_linux()
+            elif self._platform == "win32":
+                self._install_windows()
+            else:
+                raise MultipassInstallerError(
+                    f"platform {self._platform} not supported"
+                )
 
-            self.multipass_path = self._find_multipass()
-            if self.multipass_path is None or not self.multipass_path.exists():
+            self._multipass_path = self._find_multipass()
+            if self._multipass_path is None or not self._multipass_path.exists():
                 raise MultipassInstallerError("multipass not found")
 
-            subprocess.run(
-                ["sudo", str(self.multipass_path), "waitready", "--timeout=30"],
-                check=True,
-            )
-            subprocess.run(
-                ["sudo", str(self.multipass_path), "init", "--auto"], check=True
-            )
-
         self._ensure_supported_version()
+        return self._multipass_path

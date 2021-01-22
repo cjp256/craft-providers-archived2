@@ -18,6 +18,7 @@ import logging
 import os
 import pathlib
 import subprocess
+import sys
 from typing import Any, Dict, List, Optional
 
 from .. import Executor
@@ -27,7 +28,14 @@ logger = logging.getLogger(__name__)
 
 
 class MultipassInstanceError(Exception):
+    """Unexpected error operating on VM.
+
+    :param msg: Error description.
+    """
+
     def __init__(self, msg: str) -> None:
+        super().__init__()
+
         self.msg = msg
 
     def __str__(self) -> str:
@@ -41,21 +49,18 @@ class MultipassInstance(Executor):
         self,
         *,
         name: str,
+        multipass: Multipass,
         host_gid: int = os.getuid(),
         host_uid: int = os.getgid(),
-        multipass: Optional[Multipass] = None,
+        platform: str = sys.platform,
     ):
         super().__init__()
 
         self.name = name
-
         self._host_gid = host_gid
         self._host_uid = host_uid
-
-        if multipass is None:
-            self.multipass = Multipass()
-        else:
-            self.multipass = multipass
+        self._multipass = multipass
+        self._platform = platform
 
     def create_file(
         self,
@@ -78,9 +83,9 @@ class MultipassInstance(Executor):
 
         # Multipass makes us do a song and dance because it doesn't support
         # executing / transfering as root.
-        tmp_file_path = "/".join("/tmp", destination.as_posix().replace("/", "_"))
+        tmp_file_path = "/".join(["/tmp", destination.as_posix().replace("/", "_")])
 
-        self.multipass.transfer_from_io(
+        self._multipass.transfer_from_io(
             source=stream,
             destination=f"{self.name}:{tmp_file_path}",
         )
@@ -102,10 +107,13 @@ class MultipassInstance(Executor):
 
         :param purge: Purge instances immediately.
         """
-        return self.multipass.delete(
+        return self._multipass.delete(
             instance_name=self.name,
             purge=purge,
         )
+
+    def _formulate_command(self, command: List[str]) -> List[str]:
+        return ["sudo", "-H", "/root", "--", *command]
 
     def execute_popen(self, command: List[str], **kwargs) -> subprocess.Popen:
         """Execute process in instance using subprocess.Popen().
@@ -115,11 +123,9 @@ class MultipassInstance(Executor):
 
         :returns: Popen instance.
         """
-        return self.multipass.exec(
+        return self._multipass.exec(
             instance_name=self.name,
-            command=command,
-            project=self.project,
-            remote=self.remote,
+            command=self._formulate_command(command),
             runner=subprocess.Popen,
             **kwargs,
         )
@@ -138,11 +144,9 @@ class MultipassInstance(Executor):
         :raises subprocess.CalledProcessError: if command fails and check is
             True.
         """
-
-        command = ["sudo", "-H", "/root", "--"]
-        return self.multipass.exec(
+        return self._multipass.exec(
             instance_name=self.name,
-            command=command,
+            command=self._formulate_command(command),
             runner=subprocess.run,
             check=check,
             **kwargs,
@@ -153,7 +157,7 @@ class MultipassInstance(Executor):
 
         :returns: True if instance exists.
         """
-        return self.get_state() is not None
+        return self.get_info() is not None
 
     def get_info(self) -> Optional[Dict[str, Any]]:
         """Get configuration and state for instance.
@@ -163,7 +167,7 @@ class MultipassInstance(Executor):
 
         :raises MultipassInstanceError: If unable to parse VM info.
         """
-        instance_config = self.multipass.info(instance_name=self.name)
+        instance_config = self._multipass.info(instance_name=self.name)
         if instance_config is None:
             return None
 
@@ -182,7 +186,10 @@ class MultipassInstance(Executor):
         :returns: True if source is mounted at destination.
         """
         info = self.get_info()
-        mounts = info.get("mounts")
+        if info is None:
+            raise MultipassInstanceError(f"VM no longer exists {self.name!r}.")
+
+        mounts = info.get("mounts", dict())
 
         for mount_point, mount_config in mounts.items():
             if mount_point == destination.as_posix() and mount_config.get(
@@ -220,8 +227,7 @@ class MultipassInstance(Executor):
         :param instance_name: Name of instance to use/create.
         :param instance_stop_time_mins: Stop time delay in minutes.
         """
-
-        self.multipass.launch(
+        self._multipass.launch(
             instance_name=self.name,
             image=image,
             cpus=str(cpus),
@@ -240,35 +246,27 @@ class MultipassInstance(Executor):
         if self.is_mounted(source=source, destination=destination):
             return
 
-        if self._platform != "win32":
-            uid_map = {str(self._host_uid): "0"}
-            gid_map = {str(self._host_gid): "0"}
-        else:
+        if self._platform == "win32":
             uid_map = {"0": "0"}
             gid_map = {"0": "0"}
+        else:
+            uid_map = {str(self._host_uid): "0"}
+            gid_map = {str(self._host_gid): "0"}
 
-        self._multipass_cmd.mount(
+        self._multipass.mount(
             source=source,
             target=f"{self.name}:{destination.as_posix()}",
             uid_map=uid_map,
             gid_map=gid_map,
         )
 
-        self.multipass.config_device_add_disk(
-            instance_name=self.name,
-            source=source,
-            destination=destination,
-            project=self.project,
-            remote=self.remote,
-        )
-
     def start(self) -> None:
         """Start instance."""
-        self.multipass.start(instance_name=self.name)
+        self._multipass.start(instance_name=self.name)
 
     def stop(self) -> None:
         """Stop instance."""
-        self.multipass.stop(instance_name=self.name)
+        self._multipass.stop(instance_name=self.name)
 
     def supports_mount(self) -> bool:
         """Check if instance supports mounting from host.
@@ -299,9 +297,8 @@ class MultipassInstance(Executor):
         # TODO: check if mount makes source == destination, skip if so.
         if self.is_target_file(source):
             destination.parent.mkdir(parents=True, exist_ok=True)
-            self.multipass.transfer(
-                source=f"{self.name}:{source!s}",
-                destination=destination,
+            self._multipass.transfer(
+                source=f"{self.name}:{source!s}", destination=str(destination)
             )
         elif self.is_target_directory(target=source):
             self.naive_directory_sync_from(source=source, destination=destination)
@@ -327,8 +324,8 @@ class MultipassInstance(Executor):
         logger.info("Syncing host:%s -> env:%s...", source, destination)
         if source.is_file():
             destination.parent.mkdir(parents=True, exist_ok=True)
-            self.multipass.transfer(
-                source=source,
+            self._multipass.transfer(
+                source=str(source),
                 destination=f"{self.name}:{destination!s}",
             )
         elif source.is_dir():

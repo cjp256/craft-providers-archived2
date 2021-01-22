@@ -1,6 +1,5 @@
-# -*- Mode:Python; indent-tabs-mode:nil; tab-width:4 -*-
 #
-# Copyright (C) 2018 Canonical Ltd
+# Copyright (C) 2020-2021 Canonical Ltd
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -14,7 +13,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import hashlib
+"""Windows support for Multipass."""
+
 import logging
 import os
 import os.path
@@ -25,10 +25,13 @@ import sys
 import tempfile
 
 import requests
-import simplejson
+
+from craft_providers.util.path import calculate_file_hash
 
 if sys.platform == "win32":
-    import winreg
+    import winreg  # pylint: disable=import-error
+else:
+    winreg = None  # pylint: disable=invalid-name
 
 logger = logging.getLogger(__name__)
 
@@ -43,34 +46,24 @@ _MULTIPASS_DL_NAME = "multipass-{version}+win-win64.exe".format(
 _MULTIPASS_DL_SHA3_384 = "a1ac2eeb77b2a98fe5dee198be70dbf1a985d94b9707ce33ea0d3828dbc90d07fccb9662b7c97a3cfa194895b4f56676"
 
 
-class MultipassWindowsInstallError:
+class MultipassWindowsInstallError(Exception):
+    """Multipass Installation Error.
+
+    :param reason: Reason for install failure.
+    """
+
     def __init__(self, reason: str) -> None:
+        super().__init__()
+
         self.reason = reason
 
     def __str__(self) -> str:
         return self.reason
 
 
-def _calculate_file_sha3_384_hash(
-    file_path: pathlib.Path, chunk_size: int = 1024 * 1024
-) -> str:
-    """Calculate sha3 384 hash, reading the file in specified chunks."""
-    m = hashlib.sha3_384()
-
-    with file_path.open() as f:
-        while True:
-            chunk = f.read(chunk_size)
-            if not chunk:
-                break
-            m.update(chunk)
-
-    return m.hexdigest()
-
-
 def reload_multipass_path_env(winreg_module=winreg):
     """Update PATH to include installed Multipass, if not already set."""
-
-    assert sys.platform == "win32"
+    assert winreg_module
 
     key = winreg_module.OpenKey(winreg_module.HKEY_CURRENT_USER, "Environment")
 
@@ -91,7 +84,6 @@ def reload_multipass_path_env(winreg_module=winreg):
 
 def _run_installer(installer: pathlib.Path):
     """Execute multipass installer."""
-
     logger.info("Installing Multipass...")
 
     # Multipass requires administrative privileges to install, which requires
@@ -131,13 +123,13 @@ def _run_installer(installer: pathlib.Path):
     logger.info("Multipass installation completed successfully.")
 
 
-def _requests_exception_hint(e: requests.RequestException) -> str:
+def _requests_exception_hint(error: requests.RequestException) -> str:
     # Use the __doc__ description to give the user a hint. It seems to be a
     # a decent option over trying to enumerate all of possible types.
-    if e.__doc__:
-        split_lines = e.__doc__.splitlines()
+    if error.__doc__:
+        split_lines = error.__doc__.splitlines()
         if split_lines:
-            return e.__doc__.splitlines()[0].strip()
+            return error.__doc__.splitlines()[0].strip()
 
     # Should never get here.
     return "unknown download error"
@@ -154,7 +146,6 @@ def _fetch_installer_url(
     execute whitelisted executables on behalf of the user.  Verify the
     installer using a SHA3-384 digest.
     """
-
     try:
         resp = requests.get(url)
     except requests.RequestException as error:
@@ -165,7 +156,7 @@ def _fetch_installer_url(
 
     try:
         data = resp.json()
-    except simplejson.scanner.JSONDecodeError as error:
+    except ValueError as error:
         raise MultipassWindowsInstallError(
             reason=f"Failed to download valid release data from: {url}"
         ) from error
@@ -184,9 +175,10 @@ def _fetch_installer_url(
     )
 
 
-def _download_multipass(dl_dir: pathlib.Path, chunk_size: int = 32 * 1024) -> str:
-    """Creates temporary Downloads installer to temp directory."""
-
+def _download_multipass(
+    dl_dir: pathlib.Path, chunk_size: int = 32 * 1024
+) -> pathlib.Path:
+    """Create temporary dir to download installer."""
     dl_url = _fetch_installer_url()
     dl_basename = os.path.basename(dl_url)
     dl_path = dl_dir / dl_basename
@@ -204,7 +196,7 @@ def _download_multipass(dl_dir: pathlib.Path, chunk_size: int = 32 * 1024) -> st
             reason=f"Failed to download Multipass installer from {dl_url!r}: {hint}"
         ) from error
 
-    digest = _calculate_file_sha3_384_hash(dl_path)
+    digest = calculate_file_hash(file_path=dl_path, algorithm="sha3_384")
     if digest != _MULTIPASS_DL_SHA3_384:
         raise MultipassWindowsInstallError(
             reason=f"Downad failed verification.  Expected hash {_MULTIPASS_DL_SHA3_384!r}, found {digest!r}."

@@ -19,6 +19,15 @@ from typing import Optional
 def input_prompt(
     prompt: str, *, input_handler=input, default: Optional[str] = None
 ) -> str:
+    """Prompt user, returning default if user does not supply answer.
+
+    :param prompt: Message to prompt.
+    :param input_handler: Input method to invoke to gather input, defaults to
+        input().
+    :param default: Default if response is empty ("").
+
+    :returns: User response accounting for default.
+    """
     resp = input_handler(prompt)
     if resp == "" and default is not None:
         resp = default
@@ -33,6 +42,16 @@ def input_prompt_bool(
     default: bool = False,
     retry_invalid: bool = True
 ) -> bool:
+    """Prompt user, returning default if user does not supply answer.
+
+    :param prompt: Message to prompt.
+    :param input_handler: Input method to invoke to gather input, defaults to
+        input().
+    :param default: Default if response is empty ("").
+    :param retry_invalid: Keep asking the user until they supply a valid answer.
+
+    :returns: User response accounting for default.
+    """
     if default:
         prompt += " [y|N] "
         default_resp = "N"

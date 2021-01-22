@@ -13,6 +13,11 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""API provider for Multipass.
+
+This implementation interfaces with multipass using the `multipass` command-line
+utility.
+"""
 
 import io
 import json
@@ -20,13 +25,22 @@ import logging
 import pathlib
 import shlex
 import subprocess
-from typing import IO, Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
-class MultipassError:
-    def __init__(self, *, command: str, returncode: int, msg: str) -> None:
+class MultipassError(Exception):
+    """Unexpected error when interfacing with multipass command-line.
+
+    :param command: Command being executed.
+    :param returncode: Exit code of command.
+    :param msg: Description of error.
+    """
+
+    def __init__(self, *, command: List[str], returncode: int, msg: str) -> None:
+        super().__init__()
+
         self.command = command
         self.returncode = returncode
         self.msg = msg
@@ -41,19 +55,18 @@ class Multipass:
     :param multipass_path: Path to multipass command to use.
     """
 
-    def __init__(
-        self, *, multipass_path: pathlib.Path = pathlib.Path("multipass")
-    ) -> None:
+    def __init__(self, *, multipass_path: pathlib.Path) -> None:
         self.multipass_path = multipass_path
 
     def _run(  # pylint: disable=redefined-builtin
         self,
-        *,
         command: List[str],
+        *,
         check: bool = True,
         input=None,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        **kwargs,
     ) -> subprocess.CompletedProcess:
         """Execute command in instance_name, allowing output to console."""
         command = [str(self.multipass_path), *command]
@@ -64,11 +77,16 @@ class Multipass:
         try:
             if input is not None:
                 proc = subprocess.run(
-                    command, check=check, input=input, stderr=stderr, stdout=stdout
+                    command,
+                    check=check,
+                    input=input,
+                    stderr=stderr,
+                    stdout=stdout,
+                    **kwargs,
                 )
             else:
                 proc = subprocess.run(
-                    command, check=check, stderr=stderr, stdout=stdout
+                    command, check=check, stderr=stderr, stdout=stdout, **kwargs
                 )
         except subprocess.CalledProcessError as error:
             logger.warning("Failed to execute: %s", error.output)
@@ -129,8 +147,8 @@ class Multipass:
                 return None
 
             raise MultipassError(
-                command=error.command,
-                exit_code=error.returncode,
+                command=error.cmd,
+                returncode=error.returncode,
                 msg=f"Failed to query info for VM {instance_name!r}.",
             ) from error
 
@@ -167,8 +185,8 @@ class Multipass:
             self._run(command, check=True)
         except subprocess.CalledProcessError as error:
             raise MultipassError(
-                command=error.command,
-                exit_code=error.returncode,
+                command=error.cmd,
+                returncode=error.returncode,
                 msg=f"Failed to launch VM {instance_name!r}.",
             ) from error
 
@@ -185,8 +203,8 @@ class Multipass:
             self._run(command, check=True)
         except subprocess.CalledProcessError as error:
             raise MultipassError(
-                command=error.command,
-                exit_code=error.returncode,
+                command=error.cmd,
+                returncode=error.returncode,
                 msg=f"Failed to start VM {instance_name!r}.",
             ) from error
 
@@ -209,8 +227,8 @@ class Multipass:
             self._run(command)
         except subprocess.CalledProcessError as error:
             raise MultipassError(
-                command=error.command,
-                exit_code=error.returncode,
+                command=error.cmd,
+                returncode=error.returncode,
                 msg=f"Failed to stop VM {instance_name!r}.",
             ) from error
 
@@ -250,8 +268,8 @@ class Multipass:
             self._run(command)
         except subprocess.CalledProcessError as error:
             raise MultipassError(
-                command=error.command,
-                exit_code=error.returncode,
+                command=error.cmd,
+                returncode=error.returncode,
                 msg=f"Failed to mount {source!r} to {target!r}.",
             ) from error
 
@@ -266,8 +284,8 @@ class Multipass:
             self._run(["shell", instance_name], stdin=None, stdout=None, stderr=None)
         except subprocess.CalledProcessError as error:
             raise MultipassError(
-                command=error.command,
-                exit_code=error.returncode,
+                command=error.cmd,
+                returncode=error.returncode,
                 msg="Failed to execute shell.",
             ) from error
 
@@ -284,12 +302,12 @@ class Multipass:
             self._run(["umount", mount])
         except subprocess.CalledProcessError as error:
             raise MultipassError(
-                command=error.command,
-                exit_code=error.returncode,
+                command=error.cmd,
+                returncode=error.returncode,
                 msg=f"Failed to unmount {mount!r}.",
             ) from error
 
-    def transfer(self, *, source: str, destination: str, bufsize: int = 4096) -> None:
+    def transfer(self, *, source: str, destination: str) -> None:
         """Transer to destination path with source IO.
 
         :param source: The source path, prefixed with <name:> for a path inside
@@ -299,19 +317,19 @@ class Multipass:
 
         :raises MultipassError: On error.
         """
-        command = [str(self.multipass_command), "transfer", source, destination]
+        command = [str(self.multipass_path), "transfer", source, destination]
 
         try:
             self._run(command)
         except subprocess.CalledProcessError as error:
             raise MultipassError(
-                command=error.command,
-                exit_code=error.returncode,
+                command=error.cmd,
+                returncode=error.returncode,
                 msg=f"Failed to transer {source!r} to {destination!r}.",
             ) from error
 
     def transfer_from_io(
-        self, *, source: IO, destination: str, bufsize: int = 4096
+        self, *, source: io.BufferedIOBase, destination: str, chunk_size: int = 4096
     ) -> None:
         """Transer to destination path with source IO.
 
@@ -324,35 +342,41 @@ class Multipass:
         assert isinstance(source, io.IOBase)
 
         # Cannot use std{in,out}=open(...) due to LP #1849753.
-        command = [str(self.multipass_command), "transfer", "-", destination]
+        command = [str(self.multipass_path), "transfer", "-", destination]
         proc = subprocess.Popen(command, stdin=subprocess.PIPE)
 
+        # Should never happen, but pyright makes noise.
+        assert proc.stdin is not None
+
         while True:
-            read = source.read(bufsize)
-            if read:
-                proc.stdin.write(read)
-            if len(read) < bufsize:
+            buf = source.read(chunk_size)
+            if buf:
+                proc.stdin.write(buf)
+
+            if buf is None or len(buf) < chunk_size:
                 logger.debug("Finished streaming source file")
                 break
 
+        # Wait until process is complete.
         while True:
             try:
-                out, err = proc.communicate(timeout=1)
+                _, _ = proc.communicate(timeout=1)
             except subprocess.TimeoutExpired:
                 pass
 
             if proc.returncode == 0:
                 logger.debug("Process completed")
                 break
-            elif proc.returncode is not None:
+
+            if proc.returncode is not None:
                 raise MultipassError(
                     command=command,
-                    exit_code=proc.returncode,
+                    returncode=proc.returncode,
                     msg=f"Failed to transer file {destination!r} to source.",
                 )
 
     def transfer_to_io(
-        self, *, source: str, destination: IO, bufsize: int = 1024
+        self, *, source: str, destination: io.BufferedIOBase, chunk_size: int = 4096
     ) -> None:
         """Transer from source file to destination IO.
 
@@ -365,25 +389,28 @@ class Multipass:
         assert isinstance(destination, io.IOBase)
 
         # can't use std{in,out}=open(...) due to LP#1849753
-        command = ([str(self.multipass_path), "transfer", source, "-"],)
+        command = [str(self.multipass_path), "transfer", source, "-"]
         proc = subprocess.Popen(
-            command=command,
+            command,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
         )
 
+        # Should never happen, but pyright makes noise.
+        assert proc.stdout is not None
+
         while True:
-            written = proc.stdout.read(bufsize)
+            written = proc.stdout.read(chunk_size)
             if written:
                 destination.write(written)
 
-            if len(written) < bufsize:
+            if len(written) < chunk_size:
                 logger.debug("Finished streaming standard output")
                 break
 
         while True:
             try:
-                out, err = proc.communicate(timeout=1)
+                out, _ = proc.communicate(timeout=1)
             except subprocess.TimeoutExpired:
                 continue
 
@@ -393,9 +420,10 @@ class Multipass:
             if proc.returncode == 0:
                 logger.debug("Process completed")
                 break
-            elif proc.returncode is not None:
+
+            if proc.returncode is not None:
                 raise MultipassError(
                     command=command,
-                    exit_code=proc.returncode,
+                    returncode=proc.returncode,
                     msg=f"Failed to transer file {source!r} to destination.",
                 )

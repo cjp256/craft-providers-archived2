@@ -1,6 +1,4 @@
-# -*- Mode:Python; indent-tabs-mode:nil; tab-width:4 -*-
-#
-# Copyright (C) 2018-2020 Canonical Ltd
+# Copyright (C) 2021 Canonical Ltd
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -14,31 +12,41 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""Multipass Provider."""
+
 import logging
+import pathlib
 import sys
 from typing import Optional
 
-from .._base_provider import Provider
+from craft_providers import Provider, images
+
+from .multipass import Multipass
+from .multipass_installer import MultipassInstaller
+from .multipass_instance import MultipassInstance
 
 logger = logging.getLogger(__name__)
 
 
-def _get_disk_image(self) -> str:
-    return "snapcraft:{}".format(self.project._get_build_base())
-
-
 class MultipassProviderError(Exception):
-    def __init__(self, reason: str) -> None:
-        self.reason = reason
+    """Multipass provider error.
+
+    :param msg: Reason for provider error.
+    """
+
+    def __init__(self, msg: str) -> None:
+        super().__init__()
+
+        self.msg = msg
 
     def __str__(self) -> str:
-        return self.reason
+        return self.msg
 
 
 class MultipassProvider(Provider):
     """Multipass Provider.
 
-    :param auto_clean: Automatically clean LXD instances if required (e.g.
+    :param auto_clean: Automatically clean instances if required (e.g.
         incompatible).
     :param image_configuration: Image configuration.
     :param image_name: Image to use: [[<remote:>]<image> | <url>].
@@ -57,13 +65,17 @@ class MultipassProvider(Provider):
         *,
         auto_clean: bool = True,
         image_configuration: images.Image,
+        image_name: str = "snapcraft:core20",
         instance: Optional[MultipassInstance] = None,
         instance_cpus: int = 2,
         instance_disk_gb: int = 256,
         instance_mem_gb: int = 2,
         instance_name: str,
         instance_stop_time_mins: int = 10,
+        input_handler=input,
         multipass: Optional[Multipass] = None,
+        multipass_installer: Optional[MultipassInstaller] = None,
+        platform: str = sys.platform,
     ):
         super().__init__()
 
@@ -78,14 +90,25 @@ class MultipassProvider(Provider):
         self.instance_stop_time_mins = instance_stop_time_mins
 
         if multipass is None:
-            self.multipass = Multipass()
+            self._multipass = Multipass(multipass_path=pathlib.Path("multipass"))
         else:
-            self.multipass = multipass
+            self._multipass = multipass
 
-    def setup(self, *, input_prompt=input, platform=sys.platform) -> LXDInstance:
+        if multipass_installer is None:
+            self._multipass_installer = MultipassInstaller(
+                input_handler=input_handler, platform=platform
+            )
+        else:
+            self._multipass_installer = multipass_installer
+
+        self._platform = platform
+
+    def setup(
+        self,
+    ) -> MultipassInstance:
         """Create, start, and configure instance as necessary.
 
-        :param input_prompt: Input function with prompt parameter.  Defaults to
+        :param input_handler: Input function with prompt parameter.  Defaults to
             input().
         :param platform: Running platform.  Defaults to sys.platform.
 
@@ -94,40 +117,14 @@ class MultipassProvider(Provider):
         :raises MultipassProviderError: If platform unsupported or unable to
             instantiate VM.
         """
-        self.instance = self._setup_instance(
-            image_configuration=self.image_configuration,
-            image_name=self.image_name,
-            instance_name=self.instance_name,
-        )
+        multipass_path = self._multipass_installer.install()
 
-        return self.instance
+        # Update API object to utilize discovered path.
+        self._multipass.multipass_path = multipass_path
 
-    def _setup_multipass(
-        self, *, input_prompt=input, platform=sys.platform
-    ) -> pathlib.Path:
-        if self.multipass_path.exists():
-            return self.multipass_path
+        return self._setup_instance()
 
-        if platform == "win32":
-            # Ensure Windows PATH is up to date.
-            windows.reload_multipass_path_env()
-
-        multipass_path = path.which("multipass")
-        if path.which("multipass") is not None:
-            return multipass_path
-
-            windows.install_multipass(input_prompt=input_prompt)
-            windows.reload_multipass_path_env()
-        elif platform == "linux":
-            linux.install_multipass(input_prompt=input_prompt)
-        elif platform == "macos":
-            macos.install_multipass(input_prompt=input_prompt)
-        else:
-            raise MultipassProviderError(
-                reason="Unsupported platform for Multipass: {platform}"
-            )
-
-    def _setup_existing_instance(self, *, instance: LXDInstance) -> None:
+    def _setup_existing_instance(self, *, instance: MultipassInstance) -> None:
         try:
             self.image_configuration.setup(executor=instance)
         except images.CompatibilityError as error:
@@ -137,42 +134,29 @@ class MultipassProvider(Provider):
                     instance.name,
                     error.reason,
                 )
-                instance.delete(force=True)
+                instance.delete(purge=True)
             else:
                 raise error
 
-    def _setup_instance(
-        self,
-        *,
-        instance: str,
-        image: str,
-        image_remote: str,
-        ephemeral: bool,
-    ) -> MultipassInstance:
+    def _setup_instance(self) -> MultipassInstance:
+        """Launch, start and configure instance, ensuring existing instances are compatible."""
         instance = MultipassInstance(
-            instance_name=self.instance_name,
-            multipass=self.multipass,
+            name=self.instance_name,
+            multipass=self._multipass,
         )
 
-        # If instance already exists, special case it
-        # to ensure the instance is cleaned if incompatible.
         if instance.exists():
             self._setup_existing_instance(instance=instance)
 
         if not instance.exists():
             instance.launch(
-                name=self.name,
                 cpus=self.instance_cpus,
-                disk=self.instance_disk,
-                image=self.image,
+                disk_gb=self.instance_disk_gb,
+                mem_gb=self.instance_mem_gb,
+                image=self.image_name,
             )
 
         return instance
-
-    def _setup_project(self) -> None:
-        projects = self.lxc.project_list(remote=self.remote)
-        if self.project in projects:
-            return
 
     def teardown(self, *, clean: bool = False) -> None:
         """Tear down environment.
@@ -189,4 +173,4 @@ class MultipassProvider(Provider):
             self.instance.stop()
 
         if clean:
-            self.instance.delete(force=True)
+            self.instance.delete(purge=True)
