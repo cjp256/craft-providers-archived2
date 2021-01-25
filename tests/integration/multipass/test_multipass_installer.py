@@ -1,4 +1,4 @@
-# Copyright (C) 2021 Canonical Ltd
+# Copyright (C) 2020 Canonical Ltd
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -12,6 +12,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Multipass provider support package."""
+from craft_providers.lxd import LXD
 
-from .multipass_provider import MultipassProvider  # noqa: F401
+
+def test_setup():
+    # Test LXD setup. Of course we cannot forcibly purge LXD from host for
+    # a clean test, just work with whatever environment is provided.
+    lxd = LXD()
+    lxd.setup()

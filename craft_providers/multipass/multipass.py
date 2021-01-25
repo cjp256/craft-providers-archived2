@@ -132,9 +132,9 @@ class Multipass:
         return runner(run_command, **kwargs)  # pylint: disable=subprocess-run-check
 
     def info(self, *, instance_name: str) -> Optional[Dict[str, Any]]:
-        """Passthrough for running multipass info.
+        """Get information/state for instance.
 
-        :returns: Data from stdout if instance exists, else None.
+        :returns: Parsed json data from info command.
 
         :raises MultipassError: On error.
         """
@@ -190,8 +190,29 @@ class Multipass:
                 msg=f"Failed to launch VM {instance_name!r}.",
             ) from error
 
+    def list(self) -> List[str]:
+        """List names of VMs.
+
+        :returns: Data from stdout if instance exists, else None.
+
+        :raises MultipassError: On error.
+        """
+        command = ["list", "--format", "json"]
+
+        try:
+            proc = self._run(command)
+        except subprocess.CalledProcessError as error:
+            raise MultipassError(
+                command=error.cmd,
+                returncode=error.returncode,
+                msg="Failed to query list of VMs.",
+            ) from error
+
+        data_list = json.loads(proc.stdout).get("list", dict())
+        return [instance["name"] for instance in data_list]
+
     def start(self, *, instance_name: str) -> None:
-        """Passthrough for running multipass start.
+        """Start VM instance.
 
         :param instance_name: the name of the instance to start.
 
@@ -209,7 +230,7 @@ class Multipass:
             ) from error
 
     def stop(self, *, instance_name: str, time: int = None) -> None:
-        """Passthrough for running multipass stop.
+        """Stop VM instance.
 
         :param instance_name: the name of the instance_name to stop.
         :param time: time from now, in minutes, to delay shutdown of the
@@ -240,7 +261,7 @@ class Multipass:
         uid_map: Dict[str, str] = None,
         gid_map: Dict[str, str] = None,
     ) -> None:
-        """Passthrough for running multipass mount.
+        """Mount host source path to target.
 
         :param source: Path of local directory to mount.
         :param target: Target mount points, in <name>[:<path>] format, where
@@ -273,24 +294,8 @@ class Multipass:
                 msg=f"Failed to mount {source!r} to {target!r}.",
             ) from error
 
-    def shell(self, *, instance_name: str) -> None:
-        """Passthrough for running multipass shell.
-
-        :param instance_name: the name of the instance_name to execute command.
-
-        :raises MultipassError: On error.
-        """
-        try:
-            self._run(["shell", instance_name], stdin=None, stdout=None, stderr=None)
-        except subprocess.CalledProcessError as error:
-            raise MultipassError(
-                command=error.cmd,
-                returncode=error.returncode,
-                msg="Failed to execute shell.",
-            ) from error
-
     def umount(self, *, mount: str) -> None:
-        """Passthrough for running multipass mount.
+        """Unmount target in VM.
 
         :param mount: Mount point in <name>[:<path>] format, where <name> are
             instance names, and optional <path> are mount points.  If omitted,

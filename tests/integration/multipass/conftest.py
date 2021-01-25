@@ -1,0 +1,106 @@
+# Copyright (C) 2020 Canonical Ltd
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Fixtures for MULTIPASS integration tests."""
+import pathlib
+import random
+import string
+import subprocess
+import time
+
+import pytest
+
+from craft_providers.multipass.multipass import Multipass
+
+
+def run(cmd, **kwargs):
+    return subprocess.run(
+        cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True, **kwargs
+    )
+
+
+@pytest.fixture()
+def multipass_snap():
+    multipass_path = pathlib.Path("/snap/bin/multipass")
+    if multipass_path.exists():
+        already_installed = True
+    else:
+        already_installed = False
+        run(["sudo", "snap", "install", "multipass"])
+
+    yield multipass_path
+
+    if not already_installed:
+        run(["sudo", "snap", "remove", "multipass"])
+
+
+@pytest.fixture()
+def multipass(multipass_snap):  # pylint: disable=unused-argument
+    yield Multipass(multipass_path=pathlib.Path("/snap/bin/multipass"))
+
+
+@pytest.fixture()
+def instance_name():
+    return "itest-" + "".join(random.choices(string.ascii_uppercase, k=8))
+
+
+@pytest.fixture()
+def instance_launcher(multipass, instance_name):
+    def launch(
+        *,
+        instance_name=instance_name,
+        image="snapcraft:core20",
+        cpus="2",
+        mem="1G",
+        disk="128G",
+    ) -> str:
+        multipass.launch(
+            instance_name=instance_name,
+            image=image,
+            cpus=cpus,
+            mem=mem,
+            disk=disk,
+        )
+
+        # Make sure container is ready
+        for _ in range(0, 2400):
+            proc = multipass.exec(
+                instance_name=instance_name,
+                command=["systemctl", "is-system-running"],
+                stdout=subprocess.PIPE,
+            )
+
+            running_state = proc.stdout.decode().strip()
+            if running_state in ["running", "degraded"]:
+                break
+            time.sleep(0.1)
+
+        return instance_name
+
+    yield launch
+
+
+@pytest.fixture()
+def instance(instance_launcher, instance_name):
+    instance_launcher(
+        instance_name=instance_name,
+        image="snapcraft:core20",
+        cpus="2",
+        mem="1G",
+        disk="128G",
+    )
+
+    yield instance_name
+
+    run(["multipass", "delete", "--purge", instance_name])
