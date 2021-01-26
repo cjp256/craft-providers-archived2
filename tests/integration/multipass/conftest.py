@@ -17,6 +17,7 @@ import pathlib
 import random
 import string
 import subprocess
+import tempfile
 import time
 
 import pytest
@@ -24,10 +25,19 @@ import pytest
 from craft_providers.multipass.multipass import Multipass
 
 
-def run(cmd, **kwargs):
+def run(cmd, check=True, **kwargs):
     return subprocess.run(
-        cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True, **kwargs
+        cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=check, **kwargs
     )
+
+
+@pytest.fixture()
+def home_tmp_path():
+    """Multipass doesn't have access """
+    with tempfile.TemporaryDirectory(
+        suffix=".tmp-pytest", dir=pathlib.Path.home()
+    ) as temp_dir:
+        yield pathlib.Path(temp_dir)
 
 
 @pytest.fixture()
@@ -103,4 +113,4 @@ def instance(instance_launcher, instance_name):
 
     yield instance_name
 
-    run(["multipass", "delete", "--purge", instance_name])
+    run(["multipass", "delete", "--purge", instance_name], check=False)

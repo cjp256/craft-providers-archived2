@@ -85,7 +85,7 @@ class MultipassInstance(Executor):
         # executing / transfering as root.
         tmp_file_path = "/".join(["/tmp", destination.as_posix().replace("/", "_")])
 
-        self._multipass.transfer_from_io(
+        self._multipass.transfer_source_io(
             source=stream,
             destination=f"{self.name}:{tmp_file_path}",
         )

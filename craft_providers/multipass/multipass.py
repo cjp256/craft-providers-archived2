@@ -242,6 +242,7 @@ class Multipass:
 
         if time:
             command.extend(["--time", str(time)])
+
         command.append(instance_name)
 
         try:
@@ -322,7 +323,7 @@ class Multipass:
 
         :raises MultipassError: On error.
         """
-        command = [str(self.multipass_path), "transfer", source, destination]
+        command = ["transfer", source, destination]
 
         try:
             self._run(command)
@@ -333,53 +334,7 @@ class Multipass:
                 msg=f"Failed to transer {source!r} to {destination!r}.",
             ) from error
 
-    def transfer_from_io(
-        self, *, source: io.BufferedIOBase, destination: str, chunk_size: int = 4096
-    ) -> None:
-        """Transer to destination path with source IO.
-
-        Note that this can't use std{in,out}=open(...) due to LP #1849753.
-
-        :param source: An IO stream to read from.
-        :param destination: The destination path, prefixed with <name:> for a
-            path inside the instance.
-
-        :raises MultipassError: On error.
-        """
-        command = [str(self.multipass_path), "transfer", "-", destination]
-        proc = subprocess.Popen(command, stdin=subprocess.PIPE)
-
-        # Should never happen, but pyright makes noise.
-        assert proc.stdin is not None
-
-        while True:
-            buf = source.read(chunk_size)
-            if buf:
-                proc.stdin.write(buf)
-
-            if buf is None or len(buf) < chunk_size:
-                logger.debug("Finished streaming source file")
-                break
-
-        # Wait until process is complete.
-        while True:
-            try:
-                _, _ = proc.communicate(timeout=1)
-            except subprocess.TimeoutExpired:
-                pass
-
-            if proc.returncode == 0:
-                logger.debug("Process completed")
-                break
-
-            if proc.returncode is not None:
-                raise MultipassError(
-                    command=command,
-                    returncode=proc.returncode,
-                    msg=f"Failed to transer file {destination!r} to source.",
-                )
-
-    def transfer_to_io(
+    def transfer_destination_io(
         self, *, source: str, destination: io.BufferedIOBase, chunk_size: int = 4096
     ) -> None:
         """Transer from source file to destination IO.
@@ -429,4 +384,50 @@ class Multipass:
                     command=command,
                     returncode=proc.returncode,
                     msg=f"Failed to transer file {source!r} to destination.",
+                )
+
+    def transfer_source_io(
+        self, *, source: io.BufferedIOBase, destination: str, chunk_size: int = 4096
+    ) -> None:
+        """Transer to destination path with source IO.
+
+        Note that this can't use std{in,out}=open(...) due to LP #1849753.
+
+        :param source: An IO stream to read from.
+        :param destination: The destination path, prefixed with <name:> for a
+            path inside the instance.
+
+        :raises MultipassError: On error.
+        """
+        command = [str(self.multipass_path), "transfer", "-", destination]
+        proc = subprocess.Popen(command, stdin=subprocess.PIPE)
+
+        # Should never happen, but pyright makes noise.
+        assert proc.stdin is not None
+
+        while True:
+            buf = source.read(chunk_size)
+            if buf:
+                proc.stdin.write(buf)
+
+            if buf is None or len(buf) < chunk_size:
+                logger.debug("Finished streaming source file")
+                break
+
+        # Wait until process is complete.
+        while True:
+            try:
+                _, _ = proc.communicate(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+
+            if proc.returncode == 0:
+                logger.debug("Process completed")
+                break
+
+            if proc.returncode is not None:
+                raise MultipassError(
+                    command=command,
+                    returncode=proc.returncode,
+                    msg=f"Failed to transer file {destination!r} to source.",
                 )
