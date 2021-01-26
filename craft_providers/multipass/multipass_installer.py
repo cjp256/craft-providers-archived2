@@ -48,30 +48,21 @@ class MultipassInstaller:
         self,
         *,
         input_handler=input,
-        multipass_path: Optional[pathlib.Path] = None,
         platform: str = sys.platform,
     ):
         self._input_handler = input_handler
-
-        if multipass_path is None:
-            self._multipass_path = self._find_multipass()
-        else:
-            self._multipass_path = multipass_path
-
         self._platform = platform
 
-    def _ensure_supported_version(self) -> None:
+    def _ensure_supported_version(self, *, multipass_path: pathlib.Path) -> None:
         """Ensure Multipass meets minimum requirements.
 
         :raises MultipassInstallerError: if unsupported.
         """
-        assert self._multipass_path is not None
-
         # Make sure Multipass is ready first.
-        self._install_wait_ready()
+        self._install_wait_ready(multipass_path=multipass_path)
 
         proc = subprocess.run(
-            [str(self._multipass_path), "version"],
+            [str(multipass_path), "version"],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -81,7 +72,7 @@ class MultipassInstaller:
         output_split = proc.stdout.decode().split()
         if len(output_split) != 4:
             raise MultipassInstallerError(
-                "Failed to parse multipass version output: {output_split}."
+                f"unable to parse version output {proc.stdout.decode()!r}"
             )
 
         version_components = output_split[1].split(".")
@@ -89,7 +80,7 @@ class MultipassInstaller:
 
         if float(major_minor) < 1.5:
             raise MultipassInstallerError(
-                f"Multipass version {major_minor!r} is unsupported. Must be >= 1.5."
+                f"version {major_minor!r} unsupported (must be >= 1.5)"
             )
 
     def _find_multipass(self) -> Optional[pathlib.Path]:
@@ -119,19 +110,22 @@ class MultipassInstaller:
         return None
 
     def _install_wait_ready(
-        self, retry_interval: float = 1.0, retry_count: int = 120
+        self,
+        *,
+        multipass_path: pathlib.Path,
+        retry_interval: float = 1.0,
+        retry_count: int = 120,
     ) -> None:
-        assert self._multipass_path is not None
-
         while retry_count > 0:
             proc = subprocess.run(
-                [self._multipass_path, "version"],
+                [str(multipass_path), "version"],
                 check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
             )
 
-            if "multipass" in proc.stdout.decode():
+            # "multipass" may show up before "multipassd".
+            if "multipassd" in proc.stdout.decode():
                 return
 
             retry_count -= 1
@@ -154,14 +148,18 @@ class MultipassInstaller:
         # windows.reload_multipass_path_env()
         raise MultipassInstallerError("Windows not yet supported")
 
+    def is_installed(self) -> bool:
+        """Check if Multipass is installed (found valid multipass executable)."""
+        multipass_path = self._find_multipass()
+
+        return multipass_path is not None and multipass_path.exists()
+
     def install(self) -> pathlib.Path:
         """Ensure Multipass is installed with required version.
 
         :raises MultipassInstallerError: if unsupported.
         """
-        assert self._multipass_path is not None
-
-        if not self._multipass_path.exists():
+        if not self.is_installed():
             if not prompt.input_prompt_bool(
                 "Multipass needs to be installed.  Install now?",
                 default=False,
@@ -180,9 +178,9 @@ class MultipassInstaller:
                     f"platform {self._platform} not supported"
                 )
 
-            self._multipass_path = self._find_multipass()
-            if self._multipass_path is None or not self._multipass_path.exists():
-                raise MultipassInstallerError("multipass not found")
+        multipass_path = self._find_multipass()
+        if multipass_path is None:
+            raise MultipassInstallerError("multipass not found")
 
-        self._ensure_supported_version()
-        return self._multipass_path
+        self._ensure_supported_version(multipass_path=multipass_path)
+        return multipass_path

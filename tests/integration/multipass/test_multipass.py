@@ -151,16 +151,16 @@ def test_transfer_destination_io(instance, multipass, home_tmp_path):
     )
 
     out_path = home_tmp_path / "out.txt"
-    with out_path.open("wb") as tf:
+    with out_path.open("wb") as stream:
         multipass.transfer_destination_io(
             source=f"{instance}:/tmp/foo",
-            destination=tf,
+            destination=stream,
         )
 
     assert out_path.read_text() == "this is a test"
 
 
-def test_transfer_source_io(instance, multipass, home_tmp_path):
+def test_transfer_source_io(instance, multipass):
     test_io = io.BytesIO(b"this is a test")
 
     multipass.transfer_source_io(
