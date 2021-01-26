@@ -70,14 +70,14 @@ def instance_launcher(multipass, instance_name):
     def launch(
         *,
         instance_name=instance_name,
-        image="snapcraft:core20",
+        image_name="snapcraft:core20",
         cpus="2",
         mem="1G",
         disk="128G",
     ) -> str:
         multipass.launch(
             instance_name=instance_name,
-            image=image,
+            image=image_name,
             cpus=cpus,
             mem=mem,
             disk=disk,

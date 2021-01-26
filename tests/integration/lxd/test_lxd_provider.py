@@ -111,20 +111,6 @@ def test_incompatible_instance_compatibility_tag(
         == "Expected image compatibility tag 'craft-buildd-image-v0', found 'craft-buildd-image-vX'"
     )
 
-    lxd.LXDProvider(
-        instance_name=instance_name,
-        image=image,
-        image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-        image_remote_name="ubuntu",
-        image_remote_protocol="simplestreams",
-        lxc=lxc,
-        use_ephemeral_instances=False,
-        use_intermediate_image=False,
-        project=project,
-        remote="local",
-        auto_clean=True,
-    )
-
 
 def test_incompatible_instance_os(
     lxc, project, instance_name, instance_launcher, tmp_path

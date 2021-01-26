@@ -18,35 +18,32 @@ import textwrap
 
 import pytest
 
-from craft_providers import images, lxd
+from craft_providers import images, multipass
 from craft_providers.images import BuilddImage, BuilddImageAlias
 
 
 @pytest.mark.parametrize(
-    "alias", [BuilddImageAlias.XENIAL, BuilddImageAlias.BIONIC, BuilddImageAlias.FOCAL]
+    "alias,image_name",
+    [
+        (BuilddImageAlias.XENIAL, "snapcraft:core"),
+        (BuilddImageAlias.BIONIC, "snapcraft:core18"),
+        (BuilddImageAlias.FOCAL, "snapcraft:core20"),
+    ],
 )
-@pytest.mark.parametrize("use_ephemeral_instances", [False, True])
-@pytest.mark.parametrize("use_intermediate_image", [False, True])
-def test_lxd_provider(
-    lxc, project, alias, use_ephemeral_instances, use_intermediate_image
-):
-    image = BuilddImage(alias=alias)
-    provider = lxd.LXDProvider(
-        instance_name="test1",
-        image=image,
-        image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-        image_remote_name="ubuntu",
-        image_remote_protocol="simplestreams",
-        lxc=lxc,
-        use_ephemeral_instances=use_ephemeral_instances,
-        use_intermediate_image=use_intermediate_image,
-        project=project,
-        remote="local",
+def test_multipass_provider(instance_name, alias, image_name):
+    image_configuration = BuilddImage(alias=alias)
+    provider = multipass.MultipassProvider(
+        image_configuration=image_configuration,
+        image_name=image_name,
+        instance_cpus=2,
+        instance_disk_gb=128,
+        instance_name=instance_name,
+        instance_stop_time_mins=0,
     )
 
     instance = provider.setup()
 
-    assert isinstance(instance, lxd.LXDInstance)
+    assert isinstance(instance, multipass.MultipassInstance)
     assert instance.exists() is True
     assert instance.is_running() is True
 
@@ -56,7 +53,7 @@ def test_lxd_provider(
 
     provider.teardown(clean=False)
 
-    assert instance.exists() is not use_ephemeral_instances
+    assert instance.exists() is True
     assert instance.is_running() is False
 
     provider.teardown(clean=True)
@@ -66,63 +63,32 @@ def test_lxd_provider(
 
 
 def test_incompatible_instance_compatibility_tag(
-    lxc, project, instance_name, instance_launcher, tmp_path
+    multipass, instance_launcher, instance_name, home_tmp_path
 ):
     alias = BuilddImageAlias.XENIAL
-    instance_launcher(
-        config_keys=dict(),
+    image = BuilddImage(alias=alias)
+    instance = instance_launcher(
         instance_name=instance_name,
-        image_remote="ubuntu",
-        image=str(alias.value),
-        project=project,
-        ephemeral=False,
+        image_name="snapcraft:core",
     )
 
     # Insert incompatible config.
-    test_file = tmp_path / "image.conf"
-    test_file.write_text("compatibility_tag: craft-buildd-image-vX")
-    lxc.file_push(
-        instance=instance_name,
-        project=project,
-        source=test_file,
+    instance.create_file(
         destination=pathlib.Path("/etc/craft-image.conf"),
+        content="compatibility_tag: craft-buildd-image-vX".encode(),
+        file_mode="0644",
     )
 
-    image = BuilddImage(alias=alias)
-
     with pytest.raises(images.CompatibilityError) as exc_info:
-        provider = lxd.LXDProvider(
+        provider = multipass.MultipassProvider(
+            image_configuration=image,
             instance_name=instance_name,
-            image=image,
-            image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-            image_remote_name="ubuntu",
-            image_remote_protocol="simplestreams",
-            lxc=lxc,
-            use_ephemeral_instances=False,
-            use_intermediate_image=False,
-            project=project,
-            remote="local",
-            auto_clean=False,
         )
         provider.setup()
 
     assert (
         exc_info.value.reason
         == "Expected image compatibility tag 'craft-buildd-image-v0', found 'craft-buildd-image-vX'"
-    )
-
-    lxd.LXDProvider(
-        instance_name=instance_name,
-        image=image,
-        image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-        image_remote_name="ubuntu",
-        image_remote_protocol="simplestreams",
-        lxc=lxc,
-        use_ephemeral_instances=False,
-        use_intermediate_image=False,
-        project=project,
-        remote="local",
-        auto_clean=True,
     )
 
 
@@ -169,7 +135,7 @@ def test_incompatible_instance_os(
     image = BuilddImage(alias=alias)
 
     with pytest.raises(images.CompatibilityError) as exc_info:
-        provider = lxd.LXDProvider(
+        provider = multipass.MultipassProvider(
             instance_name=instance_name,
             image=image,
             image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
@@ -188,7 +154,7 @@ def test_incompatible_instance_os(
         exc_info.value.reason == f"Expected OS version '{alias.value!s}', found '20.10'"
     )
 
-    lxd.LXDProvider(
+    multipass.MultipassProvider(
         instance_name=instance_name,
         image=image,
         image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",

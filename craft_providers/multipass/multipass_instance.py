@@ -73,6 +73,10 @@ class MultipassInstance(Executor):
     ) -> None:
         """Create file with content and file mode.
 
+        Multipass transfers data as "ubuntu" user, forcing us to first copy a
+        file to a temporary location before moving to a (possibly) root-owned
+        location and with appropriate permissions.
+
         :param destination: Path to file.
         :param content: Contents of file.
         :param file_mode: File mode string (e.g. '0644').
@@ -81,8 +85,6 @@ class MultipassInstance(Executor):
         """
         stream = io.BytesIO(content)
 
-        # Multipass makes us do a song and dance because it doesn't support
-        # executing / transfering as root.
         tmp_file_path = "/".join(["/tmp", destination.as_posix().replace("/", "_")])
 
         self._multipass.transfer_source_io(
@@ -113,7 +115,7 @@ class MultipassInstance(Executor):
         )
 
     def _formulate_command(self, command: List[str]) -> List[str]:
-        return ["sudo", "-H", "/root", "--", *command]
+        return ["sudo", "-H", "--", *command]
 
     def execute_popen(self, command: List[str], **kwargs) -> subprocess.Popen:
         """Execute process in instance using subprocess.Popen().
@@ -171,11 +173,7 @@ class MultipassInstance(Executor):
         if instance_config is None:
             return None
 
-        config = instance_config.get("info", dict()).get(self.name)
-        if config is None:
-            raise MultipassInstanceError(f"Unable to parse VM info for {self.name!r}.")
-
-        return config
+        return instance_config.get("info", dict()).get(self.name)
 
     def is_mounted(self, *, source: pathlib.Path, destination: pathlib.Path) -> bool:
         """Check if path is mounted at target.
@@ -204,11 +202,11 @@ class MultipassInstance(Executor):
 
         :returns: True if instance is running.
         """
-        state = self.get_info()
-        if state is None:
+        info = self.get_info()
+        if info is None:
             return False
 
-        return state.get("status") == "Running"
+        return info.get("state") == "Running"
 
     def launch(
         self,

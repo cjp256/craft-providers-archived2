@@ -140,23 +140,24 @@ class MultipassProvider(Provider):
 
     def _setup_instance(self) -> MultipassInstance:
         """Launch, start and configure instance, ensuring existing instances are compatible."""
-        instance = MultipassInstance(
-            name=self.instance_name,
-            multipass=self._multipass,
-        )
+        if self.instance is None:
+            self.instance = MultipassInstance(
+                name=self.instance_name,
+                multipass=self._multipass,
+            )
 
-        if instance.exists():
-            self._setup_existing_instance(instance=instance)
+        if self.instance.exists():
+            self._setup_existing_instance(instance=self.instance)
 
-        if not instance.exists():
-            instance.launch(
+        if not self.instance.exists():
+            self.instance.launch(
                 cpus=self.instance_cpus,
                 disk_gb=self.instance_disk_gb,
                 mem_gb=self.instance_mem_gb,
                 image=self.image_name,
             )
 
-        return instance
+        return self.instance
 
     def teardown(self, *, clean: bool = False) -> None:
         """Tear down environment.
