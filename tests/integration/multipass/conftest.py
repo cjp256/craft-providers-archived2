@@ -22,7 +22,7 @@ import time
 
 import pytest
 
-from craft_providers.multipass.multipass import Multipass
+from craft_providers.multipass import Multipass, MultipassInstance
 
 
 def run(cmd, check=True, **kwargs):
@@ -67,14 +67,14 @@ def instance_name():
 
 @pytest.fixture()
 def instance_launcher(multipass, instance_name):
-    def launch(
+    def launcher(
         *,
         instance_name=instance_name,
         image_name="snapcraft:core20",
         cpus="2",
         mem="1G",
         disk="128G",
-    ) -> str:
+    ) -> MultipassInstance:
         multipass.launch(
             instance_name=instance_name,
             image=image_name,
@@ -96,21 +96,19 @@ def instance_launcher(multipass, instance_name):
                 break
             time.sleep(0.1)
 
-        return instance_name
+        return MultipassInstance(name=instance_name, multipass=multipass)
 
-    yield launch
+    yield launcher
 
 
 @pytest.fixture()
 def instance(instance_launcher, instance_name):
-    instance_launcher(
+    yield instance_launcher(
         instance_name=instance_name,
         image="snapcraft:core20",
         cpus="2",
         mem="1G",
         disk="128G",
     )
-
-    yield instance_name
 
     run(["multipass", "delete", "--purge", instance_name], check=False)

@@ -173,17 +173,3 @@ def test_incompatible_instance_os(
     assert (
         exc_info.value.reason == f"Expected OS version '{alias.value!s}', found '20.10'"
     )
-
-    lxd.LXDProvider(
-        instance_name=instance_name,
-        image=image,
-        image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-        image_remote_name="ubuntu",
-        image_remote_protocol="simplestreams",
-        lxc=lxc,
-        use_ephemeral_instances=False,
-        use_intermediate_image=False,
-        project=project,
-        remote="local",
-        auto_clean=True,
-    )

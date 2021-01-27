@@ -18,8 +18,9 @@ import textwrap
 
 import pytest
 
-from craft_providers import images, multipass
+from craft_providers import images
 from craft_providers.images import BuilddImage, BuilddImageAlias
+from craft_providers.multipass import MultipassInstance, MultipassProvider
 
 
 @pytest.mark.parametrize(
@@ -32,7 +33,7 @@ from craft_providers.images import BuilddImage, BuilddImageAlias
 )
 def test_multipass_provider(instance_name, alias, image_name):
     image_configuration = BuilddImage(alias=alias)
-    provider = multipass.MultipassProvider(
+    provider = MultipassProvider(
         image_configuration=image_configuration,
         image_name=image_name,
         instance_cpus=2,
@@ -43,7 +44,7 @@ def test_multipass_provider(instance_name, alias, image_name):
 
     instance = provider.setup()
 
-    assert isinstance(instance, multipass.MultipassInstance)
+    assert isinstance(instance, MultipassInstance)
     assert instance.exists() is True
     assert instance.is_running() is True
 
@@ -62,9 +63,11 @@ def test_multipass_provider(instance_name, alias, image_name):
     assert instance.is_running() is False
 
 
-def test_incompatible_instance_compatibility_tag(
-    multipass, instance_launcher, instance_name, home_tmp_path
-):
+@pytest.mark.parametrize(
+    "auto_clean",
+    [False, True],
+)
+def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean):
     alias = BuilddImageAlias.XENIAL
     image = BuilddImage(alias=alias)
     instance = instance_launcher(
@@ -77,38 +80,45 @@ def test_incompatible_instance_compatibility_tag(
         destination=pathlib.Path("/etc/craft-image.conf"),
         content="compatibility_tag: craft-buildd-image-vX".encode(),
         file_mode="0644",
+        uid=0,
+        gid=0,
     )
 
-    with pytest.raises(images.CompatibilityError) as exc_info:
-        provider = multipass.MultipassProvider(
-            image_configuration=image,
-            instance_name=instance_name,
-        )
-        provider.setup()
-
-    assert (
-        exc_info.value.reason
-        == "Expected image compatibility tag 'craft-buildd-image-v0', found 'craft-buildd-image-vX'"
-    )
-
-
-def test_incompatible_instance_os(
-    lxc, project, instance_name, instance_launcher, tmp_path
-):
-    alias = BuilddImageAlias.XENIAL
-    instance_launcher(
-        config_keys=dict(),
+    provider = MultipassProvider(
+        image_configuration=image,
+        instance=instance,
         instance_name=instance_name,
-        image_remote="ubuntu",
-        image=str(alias.value),
-        project=project,
-        ephemeral=False,
+        auto_clean=auto_clean,
     )
 
-    # Insert incompatible config.
-    test_file = tmp_path / "os-release"
-    test_file.write_text(
-        textwrap.dedent(
+    if auto_clean:
+        provider.setup()
+    else:
+        with pytest.raises(images.CompatibilityError) as exc_info:
+            provider.setup()
+
+        assert (
+            exc_info.value.reason
+            == "Expected image compatibility tag 'craft-buildd-image-v0', found 'craft-buildd-image-vX'"
+        )
+
+
+@pytest.mark.parametrize(
+    "auto_clean",
+    [False, True],
+)
+def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
+    alias = BuilddImageAlias.XENIAL
+    image = BuilddImage(alias=alias)
+    instance = instance_launcher(
+        instance_name=instance_name,
+        image_name="snapcraft:core",
+    )
+
+    # Insert incompatible os-release.
+    instance.create_file(
+        destination=pathlib.Path("/etc/os-release"),
+        content=textwrap.dedent(
             """
             NAME="Ubuntu"
             VERSION="20.10 (Groovy Gorilla)"
@@ -123,47 +133,26 @@ def test_incompatible_instance_os(
             VERSION_CODENAME=groovy
             UBUNTU_CODENAME=groovy
             """
-        )
-    )
-    lxc.file_push(
-        instance=instance_name,
-        project=project,
-        source=test_file,
-        destination=pathlib.Path("/etc/os-release"),
+        ).encode(),
+        file_mode="0644",
+        uid=0,
+        gid=0,
     )
 
-    image = BuilddImage(alias=alias)
-
-    with pytest.raises(images.CompatibilityError) as exc_info:
-        provider = multipass.MultipassProvider(
-            instance_name=instance_name,
-            image=image,
-            image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-            image_remote_name="ubuntu",
-            image_remote_protocol="simplestreams",
-            lxc=lxc,
-            use_ephemeral_instances=False,
-            use_intermediate_image=False,
-            project=project,
-            remote="local",
-            auto_clean=False,
-        )
-        provider.setup()
-
-    assert (
-        exc_info.value.reason == f"Expected OS version '{alias.value!s}', found '20.10'"
-    )
-
-    multipass.MultipassProvider(
+    provider = MultipassProvider(
+        image_configuration=image,
+        instance=instance,
         instance_name=instance_name,
-        image=image,
-        image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-        image_remote_name="ubuntu",
-        image_remote_protocol="simplestreams",
-        lxc=lxc,
-        use_ephemeral_instances=False,
-        use_intermediate_image=False,
-        project=project,
-        remote="local",
-        auto_clean=True,
+        auto_clean=auto_clean,
     )
+
+    if auto_clean:
+        provider.setup()
+    else:
+        with pytest.raises(images.CompatibilityError) as exc_info:
+            provider.setup()
+
+        assert (
+            exc_info.value.reason
+            == f"Expected OS version '{alias.value!s}', found '20.10'"
+        )
