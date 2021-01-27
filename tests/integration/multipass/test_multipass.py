@@ -20,7 +20,7 @@ import pytest
 
 def test_exec(instance, multipass):
     proc = multipass.exec(
-        instance_name=instance,
+        instance_name=instance.name,
         command=["echo", "this is a test"],
         capture_output=True,
     )
@@ -29,29 +29,29 @@ def test_exec(instance, multipass):
 
 
 def test_delete(instance, multipass):
-    multipass.delete(instance_name=instance, purge=False)
+    multipass.delete(instance_name=instance.name, purge=False)
 
-    info = multipass.info(instance_name=instance)
+    info = multipass.info(instance_name=instance.name)
 
-    assert info["info"][instance]["state"] == "Deleted"
+    assert info["info"][instance.name]["state"] == "Deleted"
 
 
 def test_delete_purge(instance, multipass):
-    multipass.delete(instance_name=instance, purge=True)
+    multipass.delete(instance_name=instance.name, purge=True)
 
     instances = multipass.list()
 
-    assert instance not in instances
+    assert instance.name not in instances
 
 
 def test_list(instance, multipass):
     instances = multipass.list()
 
-    assert instance in instances
+    assert instance.name in instances
 
 
 def test_mount_umount(instance, multipass, home_tmp_path):
-    mount_target = f"{instance}:/tmp/mount-dir"
+    mount_target = f"{instance.name}:/tmp/mount-dir"
     test_file = home_tmp_path / "test.txt"
     test_file.write_text("this is a test")
 
@@ -62,7 +62,7 @@ def test_mount_umount(instance, multipass, home_tmp_path):
 
     proc = multipass.exec(
         command=["cat", "/tmp/mount-dir/test.txt"],
-        instance_name=instance,
+        instance_name=instance.name,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=True,
@@ -77,29 +77,29 @@ def test_mount_umount(instance, multipass, home_tmp_path):
     with pytest.raises(subprocess.CalledProcessError):
         proc = multipass.exec(
             command=["test", "-f", "/tmp/mount-dir/test.txt"],
-            instance_name=instance,
+            instance_name=instance.name,
             check=True,
         )
 
 
 def test_stop_start(instance, multipass):
-    info = multipass.info(instance_name=instance)
-    assert info["info"][instance]["state"] == "Running"
+    info = multipass.info(instance_name=instance.name)
+    assert info["info"][instance.name]["state"] == "Running"
 
-    multipass.stop(instance_name=instance)
+    multipass.stop(instance_name=instance.name)
 
-    info = multipass.info(instance_name=instance)
-    assert info["info"][instance]["state"] == "Stopped"
+    info = multipass.info(instance_name=instance.name)
+    assert info["info"][instance.name]["state"] == "Stopped"
 
-    multipass.start(instance_name=instance)
+    multipass.start(instance_name=instance.name)
 
-    info = multipass.info(instance_name=instance)
-    assert info["info"][instance]["state"] == "Running"
+    info = multipass.info(instance_name=instance.name)
+    assert info["info"][instance.name]["state"] == "Running"
 
-    multipass.stop(instance_name=instance)
+    multipass.stop(instance_name=instance.name)
 
-    info = multipass.info(instance_name=instance)
-    assert info["info"][instance]["state"] == "Stopped"
+    info = multipass.info(instance_name=instance.name)
+    assert info["info"][instance.name]["state"] == "Stopped"
 
 
 def test_transfer_in(instance, multipass, home_tmp_path):
@@ -108,12 +108,12 @@ def test_transfer_in(instance, multipass, home_tmp_path):
 
     multipass.transfer(
         source=str(test_file),
-        destination=f"{instance}:/tmp/foo",
+        destination=f"{instance.name}:/tmp/foo",
     )
 
     proc = multipass.exec(
         command=["cat", "/tmp/foo"],
-        instance_name=instance,
+        instance_name=instance.name,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=True,
@@ -128,13 +128,13 @@ def test_transfer_out(instance, multipass, home_tmp_path):
 
     multipass.transfer(
         source=str(test_file),
-        destination=f"{instance}:/tmp/foo",
+        destination=f"{instance.name}:/tmp/foo",
     )
 
     out_path = home_tmp_path / "out.txt"
 
     multipass.transfer(
-        source=f"{instance}:/tmp/foo",
+        source=f"{instance.name}:/tmp/foo",
         destination=str(out_path),
     )
 
@@ -147,13 +147,13 @@ def test_transfer_destination_io(instance, multipass, home_tmp_path):
 
     multipass.transfer(
         source=str(test_file),
-        destination=f"{instance}:/tmp/foo",
+        destination=f"{instance.name}:/tmp/foo",
     )
 
     out_path = home_tmp_path / "out.txt"
     with out_path.open("wb") as stream:
         multipass.transfer_destination_io(
-            source=f"{instance}:/tmp/foo",
+            source=f"{instance.name}:/tmp/foo",
             destination=stream,
         )
 
@@ -165,12 +165,12 @@ def test_transfer_source_io(instance, multipass):
 
     multipass.transfer_source_io(
         source=test_io,
-        destination=f"{instance}:/tmp/foo",
+        destination=f"{instance.name}:/tmp/foo",
     )
 
     proc = multipass.exec(
         command=["cat", "/tmp/foo"],
-        instance_name=instance,
+        instance_name=instance.name,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         check=True,

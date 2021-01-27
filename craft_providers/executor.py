@@ -45,8 +45,8 @@ class Executor(ABC):
         destination: pathlib.Path,
         content: bytes,
         file_mode: str,
-        gid: int = 0,
-        uid: int = 0,
+        group: str = "root",
+        user: str = "root",
     ) -> None:
         """Create file with content and file mode."""
         ...

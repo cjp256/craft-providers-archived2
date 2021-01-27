@@ -68,8 +68,8 @@ class MultipassInstance(Executor):
         destination: pathlib.Path,
         content: bytes,
         file_mode: str,
-        gid: int = 0,
-        uid: int = 0,
+        group: str = "root",
+        user: str = "root",
     ) -> None:
         """Create file with content and file mode.
 
@@ -80,8 +80,8 @@ class MultipassInstance(Executor):
         :param destination: Path to file.
         :param content: Contents of file.
         :param file_mode: File mode string (e.g. '0644').
-        :param gid: File owner group ID.
-        :param uid: Filer owner user ID.
+        :param group: File group owner/id.
+        :param user: Filer usedr owner/id.
         """
         stream = io.BytesIO(content)
 
@@ -93,7 +93,7 @@ class MultipassInstance(Executor):
         )
 
         self.execute_run(
-            command=["sudo", "chown", f"{uid!s}:{gid!s}", tmp_file_path],
+            command=["sudo", "chown", f"{user}:{group}", tmp_file_path],
         )
 
         self.execute_run(

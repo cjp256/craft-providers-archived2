@@ -53,8 +53,8 @@ class LXDInstance(Executor):
         destination: pathlib.Path,
         content: bytes,
         file_mode: str,
-        gid: int = 0,
-        uid: int = 0,
+        group: str = "root",
+        user: str = "root",
     ) -> None:
         """Create file with content and file mode.
 
@@ -73,8 +73,8 @@ class LXDInstance(Executor):
             source=pathlib.Path(temp_file.name),
             destination=destination,
             mode=file_mode,
-            gid=str(gid),
-            uid=str(uid),
+            gid=group,
+            uid=user,
             project=self.project,
             remote=self.remote,
         )
