@@ -38,7 +38,7 @@ def test_create_file(reusable_instance, user, group, mode):
     assert proc.stdout == b"test data"
 
 
-def test_delete(instance, multipass):
+def test_delete(instance):
     instance.delete(purge=False)
 
     info = instance.get_info()
@@ -46,7 +46,7 @@ def test_delete(instance, multipass):
     assert info["state"] == "Deleted"
 
 
-def test_delete_purge(instance, multipass):
+def test_delete_purge(instance):
     instance.delete(purge=True)
 
     info = instance.get_info()
