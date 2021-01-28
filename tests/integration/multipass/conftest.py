@@ -23,7 +23,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from craft_providers.multipass import Multipass, MultipassInstaller, MultipassInstance
+from craft_providers.multipass import Multipass, MultipassInstance, multipass_installer
 
 
 def run(cmd, check=True, **kwargs):
@@ -43,9 +43,7 @@ def home_tmp_path():
 
 @pytest.fixture(scope="module", autouse=True)
 def multipass_path():
-    installer = MultipassInstaller()
-
-    yield installer.install()
+    yield multipass_installer.install()
 
 
 def _multipass(*, multipass_path):

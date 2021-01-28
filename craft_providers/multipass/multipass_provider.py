@@ -16,13 +16,12 @@
 
 import logging
 import pathlib
-import sys
 from typing import Optional
 
 from craft_providers import Provider, images
 
+from . import multipass_installer
 from .multipass import Multipass
-from .multipass_installer import MultipassInstaller
 from .multipass_instance import MultipassInstance
 
 logger = logging.getLogger(__name__)
@@ -73,8 +72,6 @@ class MultipassProvider(Provider):
         instance_name: str,
         instance_stop_time_mins: int = 10,
         multipass: Optional[Multipass] = None,
-        multipass_installer: Optional[MultipassInstaller] = None,
-        platform: str = sys.platform,
     ):
         super().__init__()
 
@@ -93,13 +90,6 @@ class MultipassProvider(Provider):
         else:
             self._multipass = multipass
 
-        if multipass_installer is None:
-            self._multipass_installer = MultipassInstaller(platform=platform)
-        else:
-            self._multipass_installer = multipass_installer
-
-        self._platform = platform
-
     def setup(
         self,
     ) -> MultipassInstance:
@@ -112,7 +102,7 @@ class MultipassProvider(Provider):
         :raises MultipassProviderError: If platform unsupported or unable to
             instantiate VM.
         """
-        multipass_path = self._multipass_installer.install()
+        multipass_path = multipass_installer.install()
 
         # Update API object to utilize discovered path.
         self._multipass.multipass_path = multipass_path

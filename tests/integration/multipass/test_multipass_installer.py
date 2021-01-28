@@ -18,7 +18,7 @@ import sys
 
 import pytest
 
-from craft_providers.multipass import multipass_installer
+from craft_providers.multipass.multipass_installer import install, is_installed
 
 
 @pytest.fixture(autouse=True)
@@ -33,8 +33,7 @@ def uninstalled_multipass():
 
     CRAFT_PROVIDER_TESTS_ENABLE_MULTIPASS_UNINSTALL=1
     """
-    installer = multipass_installer.MultipassInstaller()
-    if not installer.is_installed():
+    if not is_installed():
         return
 
     if (
@@ -47,7 +46,6 @@ def uninstalled_multipass():
 
 
 def test_install():
-    installer = multipass_installer.MultipassInstaller()
-    path = installer.install()
+    path = install()
 
     assert path.exists() is True
