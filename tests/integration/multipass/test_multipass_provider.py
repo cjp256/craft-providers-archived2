@@ -70,37 +70,36 @@ def test_multipass_provider(instance_name, alias, image_name):
 def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean):
     alias = BuilddImageAlias.XENIAL
     image = BuilddImage(alias=alias)
-    instance = instance_launcher(
-        instance_name=instance_name,
+
+    with instance_launcher(
         image_name="snapcraft:core",
-    )
-
-    # Insert incompatible config.
-    instance.create_file(
-        destination=pathlib.Path("/etc/craft-image.conf"),
-        content="compatibility_tag: craft-buildd-image-vX".encode(),
-        file_mode="0644",
-        uid=0,
-        gid=0,
-    )
-
-    provider = MultipassProvider(
-        image_configuration=image,
-        instance=instance,
-        instance_name=instance_name,
-        auto_clean=auto_clean,
-    )
-
-    if auto_clean:
-        provider.setup()
-    else:
-        with pytest.raises(images.CompatibilityError) as exc_info:
-            provider.setup()
-
-        assert (
-            exc_info.value.reason
-            == "Expected image compatibility tag 'craft-buildd-image-v0', found 'craft-buildd-image-vX'"
+    ) as instance:
+        # Insert incompatible config.
+        instance.create_file(
+            destination=pathlib.Path("/etc/craft-image.conf"),
+            content="compatibility_tag: craft-buildd-image-vX".encode(),
+            file_mode="0644",
+            user="root",
+            group="root",
         )
+
+        provider = MultipassProvider(
+            image_configuration=image,
+            instance=instance,
+            instance_name=instance_name,
+            auto_clean=auto_clean,
+        )
+
+        if auto_clean:
+            provider.setup()
+        else:
+            with pytest.raises(images.CompatibilityError) as exc_info:
+                provider.setup()
+
+            assert (
+                exc_info.value.reason
+                == "Expected image compatibility tag 'craft-buildd-image-v0', found 'craft-buildd-image-vX'"
+            )
 
 
 @pytest.mark.parametrize(
@@ -110,49 +109,48 @@ def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean)
 def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
     alias = BuilddImageAlias.XENIAL
     image = BuilddImage(alias=alias)
-    instance = instance_launcher(
-        instance_name=instance_name,
+
+    with instance_launcher(
         image_name="snapcraft:core",
-    )
-
-    # Insert incompatible os-release.
-    instance.create_file(
-        destination=pathlib.Path("/etc/os-release"),
-        content=textwrap.dedent(
-            """
-            NAME="Ubuntu"
-            VERSION="20.10 (Groovy Gorilla)"
-            ID=ubuntu
-            ID_LIKE=debian
-            PRETTY_NAME="Ubuntu 20.10"
-            VERSION_ID="20.10"
-            HOME_URL="https://www.ubuntu.com/"
-            SUPPORT_URL="https://help.ubuntu.com/"
-            BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
-            PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
-            VERSION_CODENAME=groovy
-            UBUNTU_CODENAME=groovy
-            """
-        ).encode(),
-        file_mode="0644",
-        uid=0,
-        gid=0,
-    )
-
-    provider = MultipassProvider(
-        image_configuration=image,
-        instance=instance,
-        instance_name=instance_name,
-        auto_clean=auto_clean,
-    )
-
-    if auto_clean:
-        provider.setup()
-    else:
-        with pytest.raises(images.CompatibilityError) as exc_info:
-            provider.setup()
-
-        assert (
-            exc_info.value.reason
-            == f"Expected OS version '{alias.value!s}', found '20.10'"
+    ) as instance:
+        # Insert incompatible os-release.
+        instance.create_file(
+            destination=pathlib.Path("/etc/os-release"),
+            content=textwrap.dedent(
+                """
+                NAME="Ubuntu"
+                VERSION="20.10 (Groovy Gorilla)"
+                ID=ubuntu
+                ID_LIKE=debian
+                PRETTY_NAME="Ubuntu 20.10"
+                VERSION_ID="20.10"
+                HOME_URL="https://www.ubuntu.com/"
+                SUPPORT_URL="https://help.ubuntu.com/"
+                BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+                PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+                VERSION_CODENAME=groovy
+                UBUNTU_CODENAME=groovy
+                """
+            ).encode(),
+            file_mode="0644",
+            user="root",
+            group="root",
         )
+
+        provider = MultipassProvider(
+            image_configuration=image,
+            instance=instance,
+            instance_name=instance_name,
+            auto_clean=auto_clean,
+        )
+
+        if auto_clean:
+            provider.setup()
+        else:
+            with pytest.raises(images.CompatibilityError) as exc_info:
+                provider.setup()
+
+            assert (
+                exc_info.value.reason
+                == f"Expected OS version '{alias.value!s}', found '20.10'"
+            )

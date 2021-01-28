@@ -175,13 +175,13 @@ class MultipassInstance(Executor):
 
         return instance_config.get("info", dict()).get(self.name)
 
-    def is_mounted(self, *, source: pathlib.Path, destination: pathlib.Path) -> bool:
+    def is_mounted(self, *, host_source: pathlib.Path, target: pathlib.Path) -> bool:
         """Check if path is mounted at target.
 
-        :param source: Host path to check.
-        :param destination: Instance path to check.
+        :param host_source: Host path to check.
+        :param target: Instance path to check.
 
-        :returns: True if source is mounted at destination.
+        :returns: True if host_source is mounted at target.
         """
         info = self.get_info()
         if info is None:
@@ -190,9 +190,9 @@ class MultipassInstance(Executor):
         mounts = info.get("mounts", dict())
 
         for mount_point, mount_config in mounts.items():
-            if mount_point == destination.as_posix() and mount_config.get(
+            if mount_point == target.as_posix() and mount_config.get(
                 "source_path"
-            ) == str(source):
+            ) == str(host_source):
                 return True
 
         return False
@@ -233,15 +233,15 @@ class MultipassInstance(Executor):
             mem=f"{mem_gb!s}G",
         )
 
-    def mount(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
-        """Mount host source directory to target mount point.
+    def mount(self, *, host_source: pathlib.Path, target: pathlib.Path) -> None:
+        """Mount host host_source directory to target mount point.
 
         Checks first to see if already mounted.
 
-        :param source: Host path to mount.
-        :param destination: Instance path to mount to.
+        :param host_source: Host path to mount.
+        :param target: Instance path to mount to.
         """
-        if self.is_mounted(source=source, destination=destination):
+        if self.is_mounted(host_source=host_source, target=target):
             return
 
         if self._platform == "win32":
@@ -252,8 +252,8 @@ class MultipassInstance(Executor):
             gid_map = {str(self._host_gid): "0"}
 
         self._multipass.mount(
-            source=source,
-            target=f"{self.name}:{destination.as_posix()}",
+            source=host_source,
+            target=f"{self.name}:{target.as_posix()}",
             uid_map=uid_map,
             gid_map=gid_map,
         )

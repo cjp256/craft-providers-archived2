@@ -72,7 +72,6 @@ class MultipassProvider(Provider):
         instance_mem_gb: int = 2,
         instance_name: str,
         instance_stop_time_mins: int = 10,
-        input_handler=input,
         multipass: Optional[Multipass] = None,
         multipass_installer: Optional[MultipassInstaller] = None,
         platform: str = sys.platform,
@@ -95,9 +94,7 @@ class MultipassProvider(Provider):
             self._multipass = multipass
 
         if multipass_installer is None:
-            self._multipass_installer = MultipassInstaller(
-                input_handler=input_handler, platform=platform
-            )
+            self._multipass_installer = MultipassInstaller(platform=platform)
         else:
             self._multipass_installer = multipass_installer
 
@@ -108,8 +105,6 @@ class MultipassProvider(Provider):
     ) -> MultipassInstance:
         """Create, start, and configure instance as necessary.
 
-        :param input_handler: Input function with prompt parameter.  Defaults to
-            input().
         :param platform: Running platform.  Defaults to sys.platform.
 
         :returns: Multipass instance.

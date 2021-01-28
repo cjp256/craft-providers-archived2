@@ -23,7 +23,7 @@ from contextlib import contextmanager
 
 import pytest
 
-from craft_providers.multipass import Multipass, MultipassInstance
+from craft_providers.multipass import Multipass, MultipassInstaller, MultipassInstance
 
 
 def run(cmd, check=True, **kwargs):
@@ -41,39 +41,25 @@ def home_tmp_path():
         yield pathlib.Path(temp_dir)
 
 
-@contextmanager
-def _multipass_snap():
-    multipass_path = pathlib.Path("/snap/bin/multipass")
-    if multipass_path.exists():
-        already_installed = True
-    else:
-        already_installed = False
-        run(["sudo", "snap", "install", "multipass"])
-
-    yield multipass_path
-
-    if not already_installed:
-        run(["sudo", "snap", "remove", "multipass"])
-
-
 @pytest.fixture(scope="module", autouse=True)
-def multipass_snap():
-    with _multipass_snap() as fixture:
-        yield fixture
+def multipass_path():
+    installer = MultipassInstaller()
+
+    yield installer.install()
 
 
-def _multipass():
-    return Multipass(multipass_path=pathlib.Path("/snap/bin/multipass"))
+def _multipass(*, multipass_path):
+    return Multipass(multipass_path=multipass_path)
 
 
 @pytest.fixture()
-def multipass(multipass_snap):  # pylint: disable=unused-argument
-    yield _multipass()
+def multipass(multipass_path):  # pylint: disable=unused-argument
+    yield _multipass(multipass_path=multipass_path)
 
 
 @pytest.fixture(scope="module")
-def reusable_multipass(multipass_snap):  # pylint: disable=unused-argument
-    yield _multipass()
+def reusable_multipass(multipass_path):  # pylint: disable=unused-argument
+    yield _multipass(multipass_path=multipass_path)
 
 
 def _instance_name():
@@ -90,21 +76,22 @@ def reusable_instance_name():
     yield _instance_name()
 
 
+@contextmanager
 def _instance(
     *,
     multipass,
     instance_name=instance_name,
     image_name="snapcraft:core20",
     cpus="2",
-    mem="1G",
     disk="128G",
-) -> MultipassInstance:
+    mem="1G",
+):
     multipass.launch(
         instance_name=instance_name,
         image=image_name,
         cpus=cpus,
-        mem=mem,
         disk=disk,
+        mem=mem,
     )
 
     # Make sure container is ready
@@ -120,39 +107,52 @@ def _instance(
             break
         time.sleep(0.1)
 
-    return MultipassInstance(name=instance_name, multipass=multipass)
+    mp_instance = MultipassInstance(name=instance_name, multipass=multipass)
 
+    yield mp_instance
 
-@pytest.fixture(scope="module")
-def reusable_instance(reusable_instance_name):
-    instance = _instance(
-        multipass=_multipass(),
-        instance_name=reusable_instance_name,
-    )
-
-    yield instance
-
-    instance.delete(purge=True)
-
-
-def _delete_instance(instance_name):
-    run(["multipass", "delete", "--purge", instance_name], check=False)
+    # Cleanup if not purged by the test.
+    if mp_instance.exists():
+        mp_instance.delete(purge=True)
 
 
 @pytest.fixture()
 def instance_launcher(multipass, instance_name):
-    def __instance(**kwargs):
-        return _instance(multipass=multipass, instance_name=instance_name, **kwargs)
+    def __instance(
+        *,
+        instance_name=instance_name,
+        image_name="snapcraft:core20",
+        cpus="2",
+        disk="128G",
+        mem="1G",
+    ):
+        return _instance(
+            multipass=multipass,
+            instance_name=instance_name,
+            image_name=image_name,
+            cpus=cpus,
+            disk=disk,
+            mem=mem,
+        )
 
-    yield __instance
-
-    _delete_instance(instance_name)
+    return __instance
 
 
 @pytest.fixture()
-def instance(instance_launcher):
-    yield instance_launcher(
-        cpus="2",
-        mem="1G",
-        disk="128G",
-    )
+def instance(instance_name, multipass):
+    with _instance(
+        multipass=multipass,
+        instance_name=instance_name,
+    ) as mp_instance:
+
+        yield mp_instance
+
+
+@pytest.fixture(scope="module")
+def reusable_instance(reusable_instance_name, reusable_multipass):
+    with _instance(
+        multipass=reusable_multipass,
+        instance_name=reusable_instance_name,
+    ) as mp_instance:
+
+        yield mp_instance

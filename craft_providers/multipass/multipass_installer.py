@@ -21,7 +21,7 @@ import sys
 from time import sleep
 from typing import Optional
 
-from craft_providers.util import path, prompt
+from craft_providers.util import path
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +47,8 @@ class MultipassInstaller:
     def __init__(
         self,
         *,
-        input_handler=input,
         platform: str = sys.platform,
     ):
-        self._input_handler = input_handler
         self._platform = platform
 
     def _ensure_supported_version(self, *, multipass_path: pathlib.Path) -> None:
@@ -160,13 +158,6 @@ class MultipassInstaller:
         :raises MultipassInstallerError: if unsupported.
         """
         if not self.is_installed():
-            if not prompt.input_prompt_bool(
-                "Multipass needs to be installed.  Install now?",
-                default=False,
-                retry_invalid=True,
-            ):
-                raise MultipassInstallerError("user declined to install")
-
             if self._platform == "darwin":
                 self._install_darwin()
             elif self._platform == "linux":
