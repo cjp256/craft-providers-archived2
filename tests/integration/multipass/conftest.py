@@ -118,7 +118,7 @@ def _instance(
 def instance_launcher(multipass, instance_name):
     def __instance(
         *,
-        instance_name=instance_name,
+        name=instance_name,
         image_name="snapcraft:core20",
         cpus="2",
         disk="128G",
@@ -126,7 +126,7 @@ def instance_launcher(multipass, instance_name):
     ):
         return _instance(
             multipass=multipass,
-            instance_name=instance_name,
+            instance_name=name,
             image_name=image_name,
             cpus=cpus,
             disk=disk,

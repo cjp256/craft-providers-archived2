@@ -62,9 +62,8 @@ def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean)
     image_name = "snapcraft:core"
 
     with instance_launcher(
-        image_configuration=image,
         image_name=image_name,
-        instance_name=instance_name,
+        name=instance_name,
     ) as instance:
         # Insert incompatible config.
         instance.create_file(
@@ -109,7 +108,7 @@ def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
     with instance_launcher(
         image_configuration=image,
         image_name=image_name,
-        instance_name=instance_name,
+        name=instance_name,
     ) as instance:
         # Insert incompatible os-release.
         instance.create_file(
