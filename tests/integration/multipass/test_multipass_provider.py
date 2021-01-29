@@ -33,13 +33,13 @@ from craft_providers.multipass import MultipassInstance, MultipassProvider
 )
 def test_multipass_provider(instance_name, alias, image_name):
     image_configuration = BuilddImage(alias=alias)
-    provider = MultipassProvider(
+    provider = MultipassProvider()
+
+    instance = provider.create_instance(
+        name=instance_name,
         image_configuration=image_configuration,
         image_name=image_name,
-        instance_name=instance_name,
     )
-
-    instance = provider.setup()
 
     assert isinstance(instance, MultipassInstance)
     assert instance.exists() is True
@@ -50,16 +50,6 @@ def test_multipass_provider(instance_name, alias, image_name):
     assert proc.stdout == b"hi\n"
 
     instance.execute_run(["sudo", "apt", "update"], check=True)
-
-    provider.teardown(clean=False, instance=instance)
-
-    assert instance.exists() is True
-    assert instance.is_running() is False
-
-    provider.teardown(clean=True, instance=instance)
-
-    assert instance.exists() is False
-    assert instance.is_running() is False
 
 
 @pytest.mark.parametrize(
@@ -72,7 +62,9 @@ def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean)
     image_name = "snapcraft:core"
 
     with instance_launcher(
+        image_configuration=image,
         image_name=image_name,
+        instance_name=instance_name,
     ) as instance:
         # Insert incompatible config.
         instance.create_file(
@@ -83,18 +75,21 @@ def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean)
             group="root",
         )
 
-        provider = MultipassProvider(
-            image_configuration=image,
-            image_name=image_name,
-            instance_name=instance_name,
-            auto_clean=auto_clean,
-        )
+        provider = MultipassProvider()
 
         if auto_clean:
-            provider.setup()
+            provider.create_instance(
+                name=instance_name,
+                image_configuration=image,
+                image_name=image_name,
+            )
         else:
             with pytest.raises(images.CompatibilityError) as exc_info:
-                provider.setup()
+                provider.create_instance(
+                    name=instance_name,
+                    image_configuration=image,
+                    image_name=image_name,
+                )
 
             assert (
                 exc_info.value.reason
@@ -112,7 +107,9 @@ def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
     image_name = "snapcraft:core"
 
     with instance_launcher(
+        image_configuration=image,
         image_name=image_name,
+        instance_name=instance_name,
     ) as instance:
         # Insert incompatible os-release.
         instance.create_file(
@@ -138,18 +135,21 @@ def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
             group="root",
         )
 
-        provider = MultipassProvider(
-            image_configuration=image,
-            image_name=image_name,
-            instance_name=instance_name,
-            auto_clean=auto_clean,
-        )
+        provider = MultipassProvider()
 
         if auto_clean:
-            provider.setup()
+            provider.create_instance(
+                name=instance_name,
+                image_configuration=image,
+                image_name=image_name,
+            )
         else:
             with pytest.raises(images.CompatibilityError) as exc_info:
-                provider.setup()
+                provider.create_instance(
+                    name=instance_name,
+                    image_configuration=image,
+                    image_name=image_name,
+                )
 
             assert (
                 exc_info.value.reason
