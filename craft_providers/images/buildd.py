@@ -164,6 +164,9 @@ class BuilddImage(Image):
         :param executor: Executor for target container.
         """
         executor.execute_run(command=["apt-get", "update"], check=True)
+        executor.execute_run(
+            command=["apt-get", "install", "-y", "apt-utils"], check=True
+        )
 
     def _setup_hostname(self, *, executor: Executor) -> None:
         """Configure hostname, installing /etc/hostname.
@@ -289,7 +292,7 @@ class BuilddImage(Image):
             logger.warning("Failed to setup networking.")
 
     def _setup_wait_for_system_ready(
-        self, *, executor: Executor, timeout_secs: int = 60
+        self, *, executor: Executor, retry_count=600, retry_interval: float = 0.1
     ) -> None:
         """Wait until system is ready.
 
@@ -297,16 +300,23 @@ class BuilddImage(Image):
         :param timeout_secs: Timeout in seconds.
         """
         logger.info("Waiting for container to be ready...")
-        for _ in range(timeout_secs * 2):
+        for _ in range(retry_count):
             proc = executor.execute_run(
-                command=["systemctl", "is-system-running"], stdout=subprocess.PIPE
+                command=["systemctl", "is-system-running"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                check=False,
             )
 
-            running_state = proc.stdout.decode().strip()
-            if running_state in ["running", "degraded"]:
-                break
+            if proc.returncode == 0:
+                running_state = proc.stdout.decode().strip()
+                if running_state in ["running", "degraded"]:
+                    break
+                logger.warning(
+                    "Unexpected state for systemctl is-system-running: %s",
+                    running_state,
+                )
 
-            logger.debug("systemctl is-system-running: %s", running_state)
-            sleep(0.5)
+            sleep(retry_interval)
         else:
-            logger.warning("Systemd failed to reach target before timeout.")
+            logger.warning("System exceeded timeout to get ready.")

@@ -36,10 +36,7 @@ def test_multipass_provider(instance_name, alias, image_name):
     provider = MultipassProvider(
         image_configuration=image_configuration,
         image_name=image_name,
-        instance_cpus=2,
-        instance_disk_gb=128,
         instance_name=instance_name,
-        instance_stop_time_mins=0,
     )
 
     instance = provider.setup()
@@ -52,12 +49,14 @@ def test_multipass_provider(instance_name, alias, image_name):
 
     assert proc.stdout == b"hi\n"
 
-    provider.teardown(clean=False)
+    instance.execute_run(["sudo", "apt", "update"], check=True)
+
+    provider.teardown(clean=False, instance=instance)
 
     assert instance.exists() is True
     assert instance.is_running() is False
 
-    provider.teardown(clean=True)
+    provider.teardown(clean=True, instance=instance)
 
     assert instance.exists() is False
     assert instance.is_running() is False
@@ -70,9 +69,10 @@ def test_multipass_provider(instance_name, alias, image_name):
 def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean):
     alias = BuilddImageAlias.XENIAL
     image = BuilddImage(alias=alias)
+    image_name = "snapcraft:core"
 
     with instance_launcher(
-        image_name="snapcraft:core",
+        image_name=image_name,
     ) as instance:
         # Insert incompatible config.
         instance.create_file(
@@ -85,7 +85,7 @@ def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean)
 
         provider = MultipassProvider(
             image_configuration=image,
-            instance=instance,
+            image_name=image_name,
             instance_name=instance_name,
             auto_clean=auto_clean,
         )
@@ -109,9 +109,10 @@ def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean)
 def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
     alias = BuilddImageAlias.XENIAL
     image = BuilddImage(alias=alias)
+    image_name = "snapcraft:core"
 
     with instance_launcher(
-        image_name="snapcraft:core",
+        image_name=image_name,
     ) as instance:
         # Insert incompatible os-release.
         instance.create_file(
@@ -139,7 +140,7 @@ def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
 
         provider = MultipassProvider(
             image_configuration=image,
-            instance=instance,
+            image_name=image_name,
             instance_name=instance_name,
             auto_clean=auto_clean,
         )

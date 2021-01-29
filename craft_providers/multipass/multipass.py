@@ -229,19 +229,18 @@ class Multipass:
                 msg=f"Failed to start VM {instance_name!r}.",
             ) from error
 
-    def stop(self, *, instance_name: str, time: int = None) -> None:
+    def stop(self, *, instance_name: str, delay_mins: int = 0) -> None:
         """Stop VM instance.
 
         :param instance_name: the name of the instance_name to stop.
-        :param time: time from now, in minutes, to delay shutdown of the
-            instance_name.
+        :param delay_mins: Delay shutdown for specified number of minutes.
 
         :raises subprocess.CalledProcessError: on error.
         """
         command = ["stop"]
 
-        if time:
-            command.extend(["--time", str(time)])
+        if delay_mins != 0:
+            command.extend(["--time", str(delay_mins)])
 
         command.append(instance_name)
 

@@ -41,6 +41,33 @@ class MultipassInstallerError(Exception):
         return f"Failed to install Multipass: {self.reason}"
 
 
+def find_multipass() -> Optional[pathlib.Path]:
+    """Find multipass executable.
+
+    Check PATH for executable, falling back to platform-specific path if not
+    found.
+
+    :returns: Path to multipass executable.  If executable not found, path
+                is /snap/bin/multipass.
+    """
+    if sys.platform == "win32":
+        bin_name = "multipass.exe"
+    else:
+        bin_name = "multipass"
+
+    # TODO: platform-specific sane options
+    fallback = pathlib.Path("/snap/bin/multipass")
+
+    bin_path = path.which(bin_name)
+    if bin_path is None and fallback.exists():
+        return fallback
+
+    if bin_path is not None and bin_path.exists():
+        return bin_path
+
+    return None
+
+
 def _get_version(*, multipass_path: pathlib.Path) -> Optional[str]:
     """Get multipass version."""
     _install_wait_ready(multipass_path=multipass_path)
@@ -69,45 +96,6 @@ def _is_supported_version(*, version: str) -> bool:
     major_minor = ".".join([version_components[0], version_components[1]])
 
     return float(major_minor) >= 1.5
-
-
-def _ensure_supported_version(*, multipass_path: pathlib.Path) -> None:
-    """Ensure Multipass meets minimum requirements.
-
-    :raises MultipassInstallerError: if unsupported.
-    """
-    version = _get_version(multipass_path=multipass_path)
-    if version is None or not _is_supported_version(version=version):
-        raise MultipassInstallerError(
-            f"version {version!r} unsupported (must be >= 1.5)"
-        )
-
-
-def _find_multipass() -> Optional[pathlib.Path]:
-    """Find multipass executable.
-
-    Check PATH for executable, falling back to platform-specific path if not
-    found.
-
-    :returns: Path to multipass executable.  If executable not found, path
-                is /snap/bin/multipass.
-    """
-    if sys.platform == "win32":
-        bin_name = "multipass.exe"
-    else:
-        bin_name = "multipass"
-
-    # TODO: platform-specific sane options
-    fallback = pathlib.Path("/snap/bin/multipass")
-
-    bin_path = path.which(bin_name)
-    if bin_path is None and fallback.exists():
-        return fallback
-
-    if bin_path is not None and bin_path.exists():
-        return bin_path
-
-    return None
 
 
 def _install_wait_ready(
@@ -152,9 +140,21 @@ def _install_windows() -> None:
     raise MultipassInstallerError("Windows not yet supported")
 
 
+def ensure_supported_version(*, multipass_path: pathlib.Path) -> None:
+    """Ensure Multipass meets minimum requirements.
+
+    :raises MultipassInstallerError: if unsupported.
+    """
+    version = _get_version(multipass_path=multipass_path)
+    if version is None or not _is_supported_version(version=version):
+        raise MultipassInstallerError(
+            f"version {version!r} unsupported (must be >= 1.5)"
+        )
+
+
 def is_installed() -> bool:
     """Check if Multipass is installed (found valid multipass executable)."""
-    multipass_path = _find_multipass()
+    multipass_path = find_multipass()
 
     return multipass_path is not None and multipass_path.exists()
 
@@ -174,9 +174,9 @@ def install(*, platform=sys.platform) -> pathlib.Path:
         else:
             raise MultipassInstallerError(f"platform {platform} not supported")
 
-    multipass_path = _find_multipass()
+    multipass_path = find_multipass()
     if multipass_path is None:
-        raise MultipassInstallerError("multipass not found")
+        raise MultipassInstallerError("Installation failed - cannot find multipass.")
 
-    _ensure_supported_version(multipass_path=multipass_path)
+    ensure_supported_version(multipass_path=multipass_path)
     return multipass_path

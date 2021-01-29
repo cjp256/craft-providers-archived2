@@ -262,9 +262,9 @@ class MultipassInstance(Executor):
         """Start instance."""
         self._multipass.start(instance_name=self.name)
 
-    def stop(self) -> None:
+    def stop(self, delay_mins: int = 0) -> None:
         """Stop instance."""
-        self._multipass.stop(instance_name=self.name)
+        self._multipass.stop(instance_name=self.name, delay_mins=delay_mins)
 
     def supports_mount(self) -> bool:
         """Check if instance supports mounting from host.

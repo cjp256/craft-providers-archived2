@@ -15,16 +15,21 @@
 """Multipass Provider."""
 
 import logging
-import pathlib
-from typing import Optional
+import sys
+from dataclasses import dataclass
 
-from craft_providers import Provider, images
+from craft_providers import images
 
 from . import multipass_installer
 from .multipass import Multipass
 from .multipass_instance import MultipassInstance
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MultipassProviderOptions:
+    """Multipass Provider Options."""
 
 
 class MultipassProviderError(Exception):
@@ -42,78 +47,109 @@ class MultipassProviderError(Exception):
         return self.msg
 
 
-class MultipassProvider(Provider):
+class MultipassProvider:
     """Multipass Provider.
 
-    :param auto_clean: Automatically clean instances if required (e.g.
+    :param auto_clean: Automatically clean instances if required (e.g. if
         incompatible).
-    :param image_configuration: Image configuration.
-    :param image_name: Image to use: [[<remote:>]<image> | <url>].
-    :param instance: Specify MultipassInstance to use, rather than create.
+    :param instance_image_name: Multipass image to use [[<remote:>]<image> | <url>].
+    :param instance_name: Name of instance to use/create. e.g. "snapcraft:core20"
     :param instance_cpus: Number of CPUs.
     :param instance_disk_gb: Disk allocation in gigabytes.
     :param instance_mem_gb: Memory allocation in gigabytes.
-    :param instance_name: Name of instance to use/create.
-    :param instance_stop_time_mins: Stop time delay in minutes.
-    :param multipass: Multipass client API provider.
     """
 
     # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         *,
-        auto_clean: bool = True,
         image_configuration: images.Image,
-        image_name: str = "snapcraft:core20",
-        instance: Optional[MultipassInstance] = None,
+        image_name: str,
+        instance_name: str,
+        auto_clean: bool = True,
         instance_cpus: int = 2,
         instance_disk_gb: int = 256,
         instance_mem_gb: int = 2,
-        instance_name: str,
-        instance_stop_time_mins: int = 10,
-        multipass: Optional[Multipass] = None,
-    ):
-        super().__init__()
+        instance_stop_delay_mins: int = 0,
+        platform: str = sys.platform,
+    ) -> None:
+        self._image_configuration = image_configuration
+        self._image_name = image_name
+        self._instance_name = instance_name
+        self._auto_clean = auto_clean
+        self._instance_cpus = instance_cpus
+        self._instance_disk_gb = instance_disk_gb
+        self._instance_mem_gb = instance_mem_gb
+        self._instance_stop_delay_mins = instance_stop_delay_mins
+        self._platform = platform
 
-        self.auto_clean = auto_clean
-        self.image_configuration = image_configuration
-        self.image_name = image_name
-        self.instance = instance
-        self.instance_cpus = instance_cpus
-        self.instance_disk_gb = instance_disk_gb
-        self.instance_mem_gb = instance_mem_gb
-        self.instance_name = instance_name
-        self.instance_stop_time_mins = instance_stop_time_mins
+    def is_installed(self) -> bool:
+        """Check if Multipass is installed."""
+        return multipass_installer.is_installed()
 
-        if multipass is None:
-            self._multipass = Multipass(multipass_path=pathlib.Path("multipass"))
-        else:
-            self._multipass = multipass
+    def install(self) -> None:
+        """Install Multipass."""
+        multipass_installer.install(platform=self._platform)
 
     def setup(
         self,
     ) -> MultipassInstance:
         """Create, start, and configure instance as necessary.
 
-        :param platform: Running platform.  Defaults to sys.platform.
+        :param name: Name of instance.
 
         :returns: Multipass instance.
-
-        :raises MultipassProviderError: If platform unsupported or unable to
-            instantiate VM.
         """
-        multipass_path = multipass_installer.install()
-
         # Update API object to utilize discovered path.
-        self._multipass.multipass_path = multipass_path
+        multipass_path = multipass_installer.find_multipass()
+        if multipass_path is None:
+            raise MultipassProviderError("Multipass not found.")
 
-        return self._setup_instance()
+        multipass = Multipass(multipass_path=multipass_path)
 
-    def _setup_existing_instance(self, *, instance: MultipassInstance) -> None:
+        instance = MultipassInstance(
+            name=self._instance_name,
+            multipass=multipass,
+        )
+
+        if instance.exists():
+            self._setup_existing_instance(
+                instance=instance,
+                auto_clean=self._auto_clean,
+                image_configuration=self._image_configuration,
+            )
+
+        # Re-check if instance exists as it may been cleaned.
+        # If it doesn't exist, launch a fresh instance.
+        if not instance.exists():
+            instance.launch(
+                cpus=self._instance_cpus,
+                disk_gb=self._instance_disk_gb,
+                mem_gb=self._instance_mem_gb,
+                image=self._image_name,
+            )
+
+        self._setup_existing_instance(
+            instance=instance,
+            auto_clean=False,
+            image_configuration=self._image_configuration,
+        )
+        return instance
+
+    def _setup_existing_instance(
+        self,
+        *,
+        instance: MultipassInstance,
+        auto_clean: bool,
+        image_configuration: images.Image,
+    ) -> None:
+        # Ensure instance is started and reset any delayed-shutdown request.
+        instance.start()
+
         try:
-            self.image_configuration.setup(executor=instance)
+            image_configuration.setup(executor=instance)
         except images.CompatibilityError as error:
-            if self.auto_clean:
+            if auto_clean:
                 logger.warning(
                     "Cleaning incompatible instance '%s' (%s).",
                     instance.name,
@@ -123,40 +159,19 @@ class MultipassProvider(Provider):
             else:
                 raise error
 
-    def _setup_instance(self) -> MultipassInstance:
-        """Launch, start and configure instance, ensuring existing instances are compatible."""
-        if self.instance is None:
-            self.instance = MultipassInstance(
-                name=self.instance_name,
-                multipass=self._multipass,
-            )
-
-        if self.instance.exists():
-            self._setup_existing_instance(instance=self.instance)
-
-        if not self.instance.exists():
-            self.instance.launch(
-                cpus=self.instance_cpus,
-                disk_gb=self.instance_disk_gb,
-                mem_gb=self.instance_mem_gb,
-                image=self.image_name,
-            )
-
-        return self.instance
-
-    def teardown(self, *, clean: bool = False) -> None:
+    def teardown(
+        self, *, instance: MultipassInstance, clean: bool, delay_shutdown_mins: int = 10
+    ) -> None:
         """Tear down environment.
 
         :param clean: Purge environment if True.
+        :param delay_shutdown_mins: Delay stopping VM for specified time.
         """
-        if self.instance is None:
+        if not instance.exists():
             return
 
-        if not self.instance.exists():
-            return
-
-        if self.instance.is_running():
-            self.instance.stop()
+        if instance.is_running():
+            instance.stop(delay_mins=delay_shutdown_mins)
 
         if clean:
-            self.instance.delete(purge=True)
+            instance.delete(purge=True)
