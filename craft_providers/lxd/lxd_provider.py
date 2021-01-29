@@ -17,7 +17,6 @@ import logging
 from typing import Optional
 
 from .. import images
-from ..provider import Provider
 from .lxc import LXC
 from .lxd import LXD
 from .lxd_instance import LXDInstance
@@ -25,7 +24,7 @@ from .lxd_instance import LXDInstance
 logger = logging.getLogger(__name__)
 
 
-class LXDProvider(Provider):
+class LXDProvider:
     """LXD Provider.
 
     :param image: Image configuration.

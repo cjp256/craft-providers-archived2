@@ -292,7 +292,7 @@ class BuilddImage(Image):
             logger.warning("Failed to setup networking.")
 
     def _setup_wait_for_system_ready(
-        self, *, executor: Executor, retry_count=600, retry_interval: float = 0.1
+        self, *, executor: Executor, retry_count=120, retry_interval: float = 0.5
     ) -> None:
         """Wait until system is ready.
 
@@ -308,10 +308,15 @@ class BuilddImage(Image):
                 check=False,
             )
 
+            running_state = proc.stdout.decode().strip()
             if proc.returncode == 0:
-                running_state = proc.stdout.decode().strip()
                 if running_state in ["running", "degraded"]:
                     break
+                logger.warning(
+                    "Unexpected state for systemctl is-system-running: %s",
+                    running_state,
+                )
+            else:
                 logger.warning(
                     "Unexpected state for systemctl is-system-running: %s",
                     running_state,

@@ -89,7 +89,7 @@ class MultipassProvider:
         image_configuration: images.Image,
         image_name: str,
         name: str,
-        auto_clean: bool = True,
+        auto_clean: bool,
         cpus: int = 2,
         disk_gb: int = 256,
         mem_gb: int = 2,

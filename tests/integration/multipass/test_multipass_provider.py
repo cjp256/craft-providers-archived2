@@ -39,6 +39,7 @@ def test_multipass_provider(instance_name, alias, image_name):
         name=instance_name,
         image_configuration=image_configuration,
         image_name=image_name,
+        auto_clean=True,
     )
 
     assert isinstance(instance, MultipassInstance)
@@ -81,6 +82,7 @@ def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean)
                 name=instance_name,
                 image_configuration=image,
                 image_name=image_name,
+                auto_clean=auto_clean,
             )
         else:
             with pytest.raises(images.CompatibilityError) as exc_info:
@@ -88,6 +90,7 @@ def test_incompatible_instance_tag(instance_launcher, instance_name, auto_clean)
                     name=instance_name,
                     image_configuration=image,
                     image_name=image_name,
+                    auto_clean=auto_clean,
                 )
 
             assert (
@@ -141,6 +144,7 @@ def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
                 name=instance_name,
                 image_configuration=image,
                 image_name=image_name,
+                auto_clean=auto_clean,
             )
         else:
             with pytest.raises(images.CompatibilityError) as exc_info:
@@ -148,6 +152,7 @@ def test_incompatible_instance_os(instance_launcher, instance_name, auto_clean):
                     name=instance_name,
                     image_configuration=image,
                     image_name=image_name,
+                    auto_clean=auto_clean,
                 )
 
             assert (

@@ -16,13 +16,12 @@
 import logging
 from typing import Optional
 
-from .. import Executor, Provider
 from .host_executor import HostExecutor
 
 logger = logging.getLogger(__name__)
 
 
-class HostProvider(Provider):
+class HostProvider:
     """Run commands directly on host."""
 
     def __init__(
@@ -33,14 +32,8 @@ class HostProvider(Provider):
         super().__init__()
         self.sudo_user = sudo_user
 
-    def setup(self) -> Executor:
+    def create_instance(self) -> HostExecutor:
         """Launch environment."""
         return HostExecutor(
             sudo_user=self.sudo_user,
         )
-
-    def teardown(self, *, clean: bool = False) -> None:
-        """Tear down environment.
-
-        :param clean: Purge environment if True.
-        """
