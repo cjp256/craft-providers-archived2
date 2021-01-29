@@ -16,7 +16,6 @@
 
 import logging
 import sys
-from dataclasses import dataclass
 
 from craft_providers import images
 
@@ -25,7 +24,6 @@ from .multipass import Multipass
 from .multipass_instance import MultipassInstance
 
 logger = logging.getLogger(__name__)
-
 
 
 class MultipassProviderError(Exception):
@@ -46,7 +44,6 @@ class MultipassProviderError(Exception):
 class MultipassProvider:
     """Multipass Provider."""
 
-    # pylint: disable=too-many-instance-attributes
     def __init__(
         self,
         *,
@@ -61,7 +58,16 @@ class MultipassProvider:
         auto_clean: bool,
         image_configuration: images.Image,
     ) -> None:
-        # Ensure instance is started and reset any delayed-shutdown request.
+        """Configure instance.
+
+        Start to instance first to ensure it is started, as well as to cancel
+        any outstanding delay-shtudown request.  Automatically clean image if
+        auto_clean is True.
+
+        :param instance: Instance to configure.
+        :param auto_clean: Automatically clean incompatible instances.
+        :param image_configuration: Image configuration.
+        """
         instance.start()
 
         try:
@@ -88,13 +94,17 @@ class MultipassProvider:
         disk_gb: int = 256,
         mem_gb: int = 2,
     ) -> MultipassInstance:
-        """Create, start, and configure instance as necessary.
+        """Create, start, and configure instance.
+
+        Re-use existing instances, but ensure compatibility with specified image
+        configuration.  If incompatible, automatically clean image if auto_clean
+        is enabled.
 
         :param name: Name of instance.
         :param auto_clean: Automatically clean instances if required (e.g. if
             incompatible).
         :param image_name: Multipass image to use [[<remote:>]<image> | <url>].
-        :param name: Name of instance to use/create. e.g. "snapcraft:core20"
+        :param name: Name of instance to use/create.  e.g. "snapcraft:core20"
         :param cpus: Number of CPUs.
         :param disk_gb: Disk allocation in gigabytes.
         :param mem_gb: Memory allocation in gigabytes.
