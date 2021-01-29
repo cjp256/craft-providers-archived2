@@ -1,4 +1,4 @@
-# Copyright (C) 2020 Canonical Ltd
+# Copyright (C) 2021 Canonical Ltd
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -309,19 +309,17 @@ class BuilddImage(Image):
             )
 
             running_state = proc.stdout.decode().strip()
-            if proc.returncode == 0:
-                if running_state in ["running", "degraded"]:
-                    break
-                logger.warning(
-                    "Unexpected state for systemctl is-system-running: %s",
-                    running_state,
-                )
-            else:
-                logger.warning(
-                    "Unexpected state for systemctl is-system-running: %s",
-                    running_state,
-                )
+            if running_state in ["running", "degraded"]:
+                break
 
+            logger.debug("systemctl is-system-running status: %s", running_state)
             sleep(retry_interval)
         else:
             logger.warning("System exceeded timeout to get ready.")
+
+    def wait_until_ready(self, *, executor: Executor) -> None:
+        """Wait until system is ready.
+
+        Ensure minimum-required boot services are running.
+        """
+        self._setup_wait_for_system_ready(executor=executor)

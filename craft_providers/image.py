@@ -1,4 +1,4 @@
-# Copyright (C) 2020 Canonical Ltd
+# Copyright (C) 2021 Canonical Ltd
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -22,7 +22,7 @@ from .executor import Executor
 logger = logging.getLogger(__name__)
 
 
-class Image(ABC):  # pylint: disable=too-few-public-methods
+class Image(ABC):
     """Image definition for configuration/setup.
 
     Images encapsulate the logic required to setup a base image upon initial
@@ -43,8 +43,16 @@ class Image(ABC):  # pylint: disable=too-few-public-methods
 
     @abstractmethod
     def setup(self, *, executor: Executor) -> None:
-        """Create, start, and configure instance as necessary.
+        """Configure instance as necessary.
 
         :raises CompatibilityError: if executor instance is incompatible with image.
+        """
+        ...
+
+    @abstractmethod
+    def wait_until_ready(self, *, executor: Executor) -> None:
+        """Wait until system is ready.
+
+        Ensure minimum-required boot services are running.
         """
         ...

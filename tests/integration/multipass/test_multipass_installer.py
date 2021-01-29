@@ -1,4 +1,4 @@
-# Copyright (C) 2020 Canonical Ltd
+# Copyright (C) 2021 Canonical Ltd
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -18,7 +18,7 @@ import sys
 
 import pytest
 
-from craft_providers.multipass.multipass_installer import install, is_installed
+from craft_providers.multipass import multipass_installer
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +33,7 @@ def uninstalled_multipass():
 
     CRAFT_PROVIDER_TESTS_ENABLE_MULTIPASS_UNINSTALL=1
     """
-    if not is_installed():
+    if not multipass_installer.is_installed():
         return
 
     if (
@@ -46,6 +46,7 @@ def uninstalled_multipass():
 
 
 def test_install():
-    path = install()
+    path = multipass_installer.install()
 
     assert path.exists() is True
+    assert multipass_installer.is_installed() is True

@@ -1,4 +1,4 @@
-# Copyright (C) 2020 Canonical Ltd
+# Copyright (C) 2021 Canonical Ltd
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 3 as
@@ -70,7 +70,7 @@ def find_multipass() -> Optional[pathlib.Path]:
 
 def _get_version(*, multipass_path: pathlib.Path) -> Optional[str]:
     """Get multipass version."""
-    _install_wait_ready(multipass_path=multipass_path)
+    _wait_until_ready(multipass_path=multipass_path)
 
     proc = subprocess.run(
         [str(multipass_path), "version"],
@@ -98,7 +98,7 @@ def _is_supported_version(*, version: str) -> bool:
     return float(major_minor) >= 1.5
 
 
-def _install_wait_ready(
+def _wait_until_ready(
     *,
     multipass_path: pathlib.Path,
     retry_interval: float = 1.0,
