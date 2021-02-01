@@ -313,7 +313,7 @@ class Multipass:
             ) from error
 
     def transfer(self, *, source: str, destination: str) -> None:
-        """Transer to destination path with source IO.
+        """Transfer to destination path with source IO.
 
         :param source: The source path, prefixed with <name:> for a path inside
             the instance.
@@ -330,13 +330,13 @@ class Multipass:
             raise MultipassError(
                 command=error.cmd,
                 returncode=error.returncode,
-                msg=f"Failed to transer {source!r} to {destination!r}.",
+                msg=f"Failed to transfer {source!r} to {destination!r}.",
             ) from error
 
     def transfer_destination_io(
         self, *, source: str, destination: io.BufferedIOBase, chunk_size: int = 4096
     ) -> None:
-        """Transer from source file to destination IO.
+        """Transfer from source file to destination IO.
 
         Note that this can't use std{in,out}=open(...) due to LP #1849753.
 
@@ -382,13 +382,13 @@ class Multipass:
                 raise MultipassError(
                     command=command,
                     returncode=proc.returncode,
-                    msg=f"Failed to transer file {source!r} to destination.",
+                    msg=f"Failed to transfer file {source!r} to destination.",
                 )
 
     def transfer_source_io(
         self, *, source: io.BufferedIOBase, destination: str, chunk_size: int = 4096
     ) -> None:
-        """Transer to destination path with source IO.
+        """Transfer to destination path with source IO.
 
         Note that this can't use std{in,out}=open(...) due to LP #1849753.
 
@@ -428,5 +428,5 @@ class Multipass:
                 raise MultipassError(
                     command=command,
                     returncode=proc.returncode,
-                    msg=f"Failed to transer file {destination!r} to source.",
+                    msg=f"Failed to transfer file {destination!r} to source.",
                 )

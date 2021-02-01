@@ -20,6 +20,8 @@ import subprocess
 import tempfile
 from typing import Any, Dict, List, Optional
 
+from craft_providers.actions import linux
+
 from .. import Executor
 from .lxc import LXC
 
@@ -61,8 +63,8 @@ class LXDInstance(Executor):
         :param destination: Path to file.
         :param content: Contents of file.
         :param file_mode: File mode string (e.g. '0644').
-        :param gid: File owner group ID.
-        :param uid: Filer owner user ID.
+        :param group: File owner group ID.
+        :param user: Filer owner user ID.
         """
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             temp_file.write(content)
@@ -253,22 +255,7 @@ class LXDInstance(Executor):
 
         return seccomp_listener == "true"
 
-    def start(self) -> None:
-        """Start instance."""
-        self.lxc.start(instance=self.name, project=self.project, remote=self.remote)
-
-    def stop(self) -> None:
-        """Stop instance."""
-        self.lxc.stop(instance=self.name, project=self.project, remote=self.remote)
-
-    def supports_mount(self) -> bool:
-        """Check if instance supports mounting from host.
-
-        :returns: True if mount is supported.
-        """
-        return self.remote == "local"
-
-    def sync_from(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
+    def pull(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
         """Copy source file/directory from environment to host destination.
 
         Standard "cp -r" rules apply:
@@ -285,7 +272,7 @@ class LXDInstance(Executor):
         """
         logger.info("Syncing env:%s -> host:%s...", source, destination)
         # TODO: check if mount makes source == destination, skip if so.
-        if self.is_target_file(source):
+        if linux.is_target_file(executor=self, target=source):
             self.lxc.file_pull(
                 instance=self.name,
                 source=source,
@@ -294,7 +281,7 @@ class LXDInstance(Executor):
                 remote=self.remote,
                 create_dirs=True,
             )
-        elif self.is_target_directory(target=source):
+        elif linux.is_target_directory(executor=self, target=source):
             self.lxc.file_pull(
                 instance=self.name,
                 source=source,
@@ -305,11 +292,13 @@ class LXDInstance(Executor):
                 recursive=True,
             )
             # TODO: use mount() if available
-            self.naive_directory_sync_from(source=source, destination=destination)
+            linux.directory_sync_from_remote(
+                executor=self, source=source, destination=destination
+            )
         else:
             raise FileNotFoundError(f"Source {source} not found.")
 
-    def sync_to(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
+    def push(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
         """Copy host source file/directory into environment at destination.
 
         Standard "cp -r" rules apply:
@@ -334,8 +323,23 @@ class LXDInstance(Executor):
             )
         elif source.is_dir():
             # TODO: use mount() if available
-            self.naive_directory_sync_to(
-                source=source, destination=destination, delete=True
+            linux.directory_sync_to_remote(
+                executor=self, source=source, destination=destination, delete=True
             )
         else:
             raise FileNotFoundError(f"Source {source} not found.")
+
+    def start(self) -> None:
+        """Start instance."""
+        self.lxc.start(instance=self.name, project=self.project, remote=self.remote)
+
+    def stop(self) -> None:
+        """Stop instance."""
+        self.lxc.stop(instance=self.name, project=self.project, remote=self.remote)
+
+    def supports_mount(self) -> bool:
+        """Check if instance supports mounting from host.
+
+        :returns: True if mount is supported.
+        """
+        return self.remote == "local"

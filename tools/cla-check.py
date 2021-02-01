@@ -27,7 +27,7 @@ from subprocess import check_call, check_output
 
 # pyright: reportMissingImports=false
 try:
-    from launchpadlib.launchpad import Launchpad
+    from launchpadlib.launchpad import Launchpad  # type: ignore
 except ImportError:
     sys.exit(
         "Install launchpadlib: sudo apt install python-launchpadlib python3-launchpadlib"

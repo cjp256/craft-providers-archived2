@@ -14,12 +14,117 @@
 
 """Linux executor actions."""
 import logging
+import pathlib
+import shutil
 import subprocess
 from time import sleep
 
 from craft_providers import Executor
 
 logger = logging.getLogger(__name__)
+
+
+def directory_sync_from_remote(
+    *,
+    executor: Executor,
+    source: pathlib.Path,
+    destination: pathlib.Path,
+    delete: bool = False,
+    host_tar_cmd: str = "tar",
+    target_tar_cmd: str = "tar"
+) -> None:
+    """Naive sync from remote using tarball.
+
+    Relies on only the required Executor.interfaces.
+
+    :param source: Target directory to copy from.
+    :param destination: Host destination directory to copy to.
+    """
+    destination_path = destination.as_posix()
+
+    if delete and destination.exists():
+        shutil.rmtree(destination)
+
+    destination.mkdir(parents=True)
+
+    archive_proc = executor.execute_popen(
+        [host_tar_cmd, "cpf", "-", "-C", source.as_posix(), "."],
+        stdout=subprocess.PIPE,
+    )
+
+    target_proc = subprocess.Popen(
+        [target_tar_cmd, "xpvf", "-,", "-C", destination_path],
+        stdin=archive_proc.stdout,
+    )
+
+    # Allow archive_proc to receive a SIGPIPE if destination_proc exits.
+    if archive_proc.stdout:
+        archive_proc.stdout.close()
+
+    # Waot until done.
+    target_proc.communicate()
+
+
+def directory_sync_to_remote(
+    *,
+    executor: Executor,
+    source: pathlib.Path,
+    destination: pathlib.Path,
+    delete=True,
+    host_tar_cmd: str = "tar",
+    target_tar_cmd: str = "tar"
+) -> None:
+    """Naive sync to remote using tarball.
+
+    :param source: Host directory to copy.
+    :param destination: Target destination directory to copy to.
+    :param delete: Flag to delete existing destination, if exists.
+    """
+    destination_path = destination.as_posix()
+
+    if delete is True:
+        executor.execute_run(["rm", "-rf", destination_path], check=True)
+
+    executor.execute_run(["mkdir", "-p", destination_path], check=True)
+
+    archive_proc = subprocess.Popen(
+        [host_tar_cmd, "cpf", "-", "-C", str(source), "."],
+        stdout=subprocess.PIPE,
+    )
+
+    target_proc = executor.execute_popen(
+        [target_tar_cmd, "xpvf", "-", "-C", destination_path],
+        stdin=archive_proc.stdout,
+    )
+
+    # Allow archive_proc to receive a SIGPIPE if destination_proc exits.
+    if archive_proc.stdout:
+        archive_proc.stdout.close()
+
+    # Waot until done.
+    target_proc.communicate()
+
+
+def is_target_directory(*, executor: Executor, target: pathlib.Path) -> bool:
+    """Check if path is directory in executed environment.
+
+    :param target: Path to check.
+
+    :returns: True if directory, False otherwise.
+    """
+    proc = executor.execute_run(command=["test", "-d", target.as_posix()])
+    return proc.returncode == 0
+
+
+def is_target_file(*, executor: Executor, target: pathlib.Path) -> bool:
+    """Check if path is file in executed environment.
+
+    :param target: Path to check.
+
+    :returns: True if file, False otherwise.
+    """
+    proc = executor.execute_run(command=["test", "-f", target.as_posix()])
+    return proc.returncode == 0
 
 
 def wait_for_system_ready(

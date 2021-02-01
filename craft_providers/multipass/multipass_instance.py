@@ -21,6 +21,8 @@ import subprocess
 import sys
 from typing import Any, Dict, List, Optional
 
+from craft_providers.actions import linux
+
 from .. import Executor
 from .multipass import Multipass
 
@@ -258,22 +260,7 @@ class MultipassInstance(Executor):
             gid_map=gid_map,
         )
 
-    def start(self) -> None:
-        """Start instance."""
-        self._multipass.start(instance_name=self.name)
-
-    def stop(self, delay_mins: int = 0) -> None:
-        """Stop instance."""
-        self._multipass.stop(instance_name=self.name, delay_mins=delay_mins)
-
-    def supports_mount(self) -> bool:
-        """Check if instance supports mounting from host.
-
-        :returns: True if mount is supported.
-        """
-        return True
-
-    def sync_from(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
+    def pull(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
         """Copy source file/directory from environment to host destination.
 
         Standard "cp -r" rules apply:
@@ -293,17 +280,19 @@ class MultipassInstance(Executor):
         logger.info("Syncing env:%s -> host:%s...", source, destination)
 
         # TODO: check if mount makes source == destination, skip if so.
-        if self.is_target_file(source):
+        if linux.is_target_file(executor=self, target=source):
             destination.parent.mkdir(parents=True, exist_ok=True)
             self._multipass.transfer(
                 source=f"{self.name}:{source!s}", destination=str(destination)
             )
-        elif self.is_target_directory(target=source):
-            self.naive_directory_sync_from(source=source, destination=destination)
+        elif linux.is_target_directory(executor=self, target=source):
+            linux.directory_sync_from_remote(
+                executor=self, source=source, destination=destination
+            )
         else:
             raise FileNotFoundError(f"Source {source} not found.")
 
-    def sync_to(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
+    def push(self, *, source: pathlib.Path, destination: pathlib.Path) -> None:
         """Copy host source file/directory into environment at destination.
 
         Standard "cp -r" rules apply:
@@ -328,8 +317,23 @@ class MultipassInstance(Executor):
             )
         elif source.is_dir():
             # TODO: use mount() if available
-            self.naive_directory_sync_to(
-                source=source, destination=destination, delete=True
+            linux.directory_sync_to_remote(
+                executor=self, source=source, destination=destination, delete=True
             )
         else:
             raise FileNotFoundError(f"Source {source} not found.")
+
+    def start(self) -> None:
+        """Start instance."""
+        self._multipass.start(instance_name=self.name)
+
+    def stop(self, delay_mins: int = 0) -> None:
+        """Stop instance."""
+        self._multipass.stop(instance_name=self.name, delay_mins=delay_mins)
+
+    def supports_mount(self) -> bool:
+        """Check if instance supports mounting from host.
+
+        :returns: True if mount is supported.
+        """
+        return True
