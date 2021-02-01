@@ -25,26 +25,23 @@ from craft_providers.images import BuilddImage, BuilddImageAlias
 @pytest.mark.parametrize(
     "alias", [BuilddImageAlias.XENIAL, BuilddImageAlias.BIONIC, BuilddImageAlias.FOCAL]
 )
-@pytest.mark.parametrize("use_ephemeral_instances", [False, True])
-@pytest.mark.parametrize("use_intermediate_image", [False, True])
-def test_lxd_provider(
-    lxc, project, alias, use_ephemeral_instances, use_intermediate_image
-):
+@pytest.mark.parametrize("ephemeral", [False, True])
+@pytest.mark.parametrize("use_snapshots", [False, True])
+def test_lxd_provider(lxc, project, alias, ephemeral, use_snapshots):
     image = BuilddImage(alias=alias)
-    provider = lxd.LXDProvider(
-        instance_name="test1",
-        image=image,
-        image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-        image_remote_name="ubuntu",
-        image_remote_protocol="simplestreams",
-        lxc=lxc,
-        use_ephemeral_instances=use_ephemeral_instances,
-        use_intermediate_image=use_intermediate_image,
+    provider = lxd.LXDProvider()
+
+    instance = provider.create_instance(
+        auto_clean=False,
+        name="test1",
+        image_configuration=image,
+        image_name=str(alias.value),
+        image_remote="ubuntu",
         project=project,
         remote="local",
+        ephemeral=ephemeral,
+        use_snapuse_snapshots=use_snapshots,
     )
-
-    instance = provider.setup()
 
     assert isinstance(instance, lxd.LXDInstance)
     assert instance.exists() is True
@@ -56,7 +53,7 @@ def test_lxd_provider(
 
     provider.teardown(clean=False)
 
-    assert instance.exists() is not use_ephemeral_instances
+    assert instance.exists() is not ephemeral
     assert instance.is_running() is False
 
     provider.teardown(clean=True)
@@ -98,8 +95,8 @@ def test_incompatible_instance_compatibility_tag(
             image_remote_name="ubuntu",
             image_remote_protocol="simplestreams",
             lxc=lxc,
-            use_ephemeral_instances=False,
-            use_intermediate_image=False,
+            ephemeral=False,
+            use_snapshots=False,
             project=project,
             remote="local",
             auto_clean=False,
@@ -162,8 +159,8 @@ def test_incompatible_instance_os(
             image_remote_name="ubuntu",
             image_remote_protocol="simplestreams",
             lxc=lxc,
-            use_ephemeral_instances=False,
-            use_intermediate_image=False,
+            ephemeral=False,
+            use_snapshots=False,
             project=project,
             remote="local",
             auto_clean=False,

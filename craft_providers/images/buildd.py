@@ -26,6 +26,7 @@ import yaml
 from craft_providers import Executor, Image
 from craft_providers.images import errors
 from craft_providers.util.os_release import parse_os_release
+from craft_providers import linux, craft_config
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,9 @@ logger = logging.getLogger(__name__)
 class BuilddImageAlias(enum.Enum):
     """Mappings for supported buildd images."""
 
-    XENIAL = 16.04
-    BIONIC = 18.04
-    FOCAL = 20.04
+    XENIAL = "16.04"
+    BIONIC = "18.04"
+    FOCAL = "20.04"
 
 
 class BuilddImage(Image):
@@ -56,32 +57,10 @@ class BuilddImage(Image):
         compatibility_tag: str = "craft-buildd-image-v0",
         hostname: str = "craft-buildd-instance",
     ):
-        super().__init__(compatibility_tag=compatibility_tag, name=str(alias.value))
+        super().__init__(compatibility_tag=compatibility_tag, name=alias.value)
 
         self.alias: Final[BuilddImageAlias] = alias
         self.hostname: Final[str] = hostname
-
-    def _read_craft_image_config(
-        self, *, executor: Executor
-    ) -> Optional[Dict[str, Any]]:
-        try:
-            proc = executor.execute_run(
-                command=["cat", "/etc/craft-image.conf"],
-                check=True,
-                stdout=subprocess.PIPE,
-            )
-        except subprocess.CalledProcessError:
-            return None
-
-        return yaml.load(proc.stdout, Loader=yaml.SafeLoader)
-
-    def _write_craft_image_config(self, *, executor: Executor) -> None:
-        conf = {"compatibility_tag": self.compatibility_tag}
-        executor.create_file(
-            destination=pathlib.Path("/etc/craft-image.conf"),
-            content=yaml.dump(conf).encode(),
-            file_mode="0644",
-        )
 
     def _read_os_release(self, *, executor: Executor) -> Optional[Dict[str, Any]]:
         try:
@@ -104,7 +83,7 @@ class BuilddImage(Image):
         self._ensure_os_compatible(executor=executor)
 
     def _ensure_image_version_compatible(self, *, executor: Executor) -> None:
-        craft_config = self._read_craft_image_config(executor=executor)
+        craft_config = craft_config.load_craft_config(executor=executor)
 
         # If no config has been written, assume it is compatible (likely an unfinished setup).
         if craft_config is None:
@@ -131,7 +110,7 @@ class BuilddImage(Image):
                 reason=f"Exepcted OS 'Ubuntu', found {os_id!r}"
             )
 
-        compat_version_id = str(self.alias.value)
+        compat_version_id = self.alias.value
         version_id = os_release.get("VERSION_ID")
         if version_id != compat_version_id:
             raise errors.CompatibilityError(

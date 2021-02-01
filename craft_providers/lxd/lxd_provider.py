@@ -54,7 +54,7 @@ class LXDProvider:
     :param lxc: Optional LXC client.
     """
 
-    def __init__(self, *, lxc: Optional[LXC]) -> None:
+    def __init__(self, *, lxc: Optional[LXC] = None) -> None:
         self._lxc = lxc
 
     def _configure_instance(
