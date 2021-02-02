@@ -36,7 +36,7 @@ def _get_snapshot_image_name(*, remote: str, compatibility_tag: str) -> str:
 class LXDProviderError(Exception):
     """LXD Provider Error.
 
-    :param reason: Reason for install failure.
+    :param reason: Reason for error.
     """
 
     def __init__(self, reason: str) -> None:
@@ -64,7 +64,8 @@ class LXDProvider:
         auto_clean: bool,
         image_configuration: images.Image,
     ) -> None:
-        instance.start()
+        if not instance.is_running():
+            instance.start()
 
         try:
             image_configuration.setup(executor=instance)
@@ -82,7 +83,12 @@ class LXDProvider:
         image_configuration.wait_until_ready(executor=instance)
 
     def create_image_remote(self, *, name: str, addr: str, protocol: str) -> None:
-        """Add a public remote."""
+        """Add a public remote.
+
+        :param name: Name of remote.
+        :param addr: Address of remote.
+        :param protocol: Protocol to use, e.g. simplestreams.
+        """
         lxc = self._get_lxc()
         lxc.remote_add(
             remote=name,
@@ -172,6 +178,19 @@ class LXDProvider:
 
         return instance
 
+    def _delete_snapshot(
+        self,
+        *,
+        snapshot_name: str,
+        project: str,
+        remote: str,
+    ) -> None:
+        self._get_lxc().image_delete(
+            image=snapshot_name,
+            project=project,
+            remote=remote,
+        )
+
     def _publish_snapshot(
         self,
         *,
@@ -183,7 +202,7 @@ class LXDProvider:
 
         self._get_lxc().publish(
             alias=snapshot_name,
-            instance=instance.name,
+            instance_name=instance.name,
             project=instance.project,
             remote=instance.remote,
             force=True,
@@ -197,7 +216,7 @@ class LXDProvider:
         """Create lxd project if it does not exist.
 
         :param name: Name of project.
-        :param remote_name: Name of remote.
+        :param remote_name: Name of remote to create project on.
         """
         lxc = self._get_lxc()
         projects = lxc.project_list(remote=remote)

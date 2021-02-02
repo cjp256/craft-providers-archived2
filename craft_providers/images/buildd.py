@@ -21,12 +21,9 @@ from textwrap import dedent
 from time import sleep
 from typing import Any, Dict, Final, Optional
 
-import yaml
-
-from craft_providers import Executor, Image
+from craft_providers import Executor, Image, actions
 from craft_providers.images import errors
 from craft_providers.util.os_release import parse_os_release
-from craft_providers import linux, craft_config
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +58,7 @@ class BuilddImage(Image):
 
         self.alias: Final[BuilddImageAlias] = alias
         self.hostname: Final[str] = hostname
+        self._craft_config_path = pathlib.Path("/etc/craft-image.conf")
 
     def _read_os_release(self, *, executor: Executor) -> Optional[Dict[str, Any]]:
         try:
@@ -83,13 +81,15 @@ class BuilddImage(Image):
         self._ensure_os_compatible(executor=executor)
 
     def _ensure_image_version_compatible(self, *, executor: Executor) -> None:
-        craft_config = craft_config.load_craft_config(executor=executor)
+        config = actions.craft_config.load(
+            executor=executor, config_path=self._craft_config_path
+        )
 
         # If no config has been written, assume it is compatible (likely an unfinished setup).
-        if craft_config is None:
+        if config is None:
             return
 
-        tag = craft_config.get("compatibility_tag")
+        tag = config.get("compatibility_tag")
         if tag != self.compatibility_tag:
             raise errors.CompatibilityError(
                 reason=(
@@ -130,6 +130,7 @@ class BuilddImage(Image):
         """
         self.ensure_compatible(executor=executor)
         self._setup_wait_for_system_ready(executor=executor)
+        self._setup_craft_image_config(executor=executor)
         self._setup_hostname(executor=executor)
         self._setup_resolved(executor=executor)
         self._setup_networkd(executor=executor)
@@ -145,6 +146,15 @@ class BuilddImage(Image):
         executor.execute_run(command=["apt-get", "update"], check=True)
         executor.execute_run(
             command=["apt-get", "install", "-y", "apt-utils"], check=True
+        )
+
+    def _setup_craft_image_config(self, *, executor: Executor) -> None:
+        config = dict(compatibility_tag=self.compatibility_tag)
+
+        actions.craft_config.save(
+            executor=executor,
+            config=config,
+            config_path=self._craft_config_path,
         )
 
     def _setup_hostname(self, *, executor: Executor) -> None:

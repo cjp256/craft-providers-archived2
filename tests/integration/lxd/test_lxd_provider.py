@@ -27,20 +27,20 @@ from craft_providers.images import BuilddImage, BuilddImageAlias
 )
 @pytest.mark.parametrize("ephemeral", [False, True])
 @pytest.mark.parametrize("use_snapshots", [False, True])
-def test_lxd_provider(lxc, project, alias, ephemeral, use_snapshots):
+def test_lxd_provider(lxc, project, alias, ephemeral, instance_name, use_snapshots):
     image = BuilddImage(alias=alias)
     provider = lxd.LXDProvider()
 
     instance = provider.create_instance(
         auto_clean=False,
-        name="test1",
+        name=instance_name,
         image_configuration=image,
         image_name=str(alias.value),
         image_remote="ubuntu",
         project=project,
         remote="local",
         ephemeral=ephemeral,
-        use_snapuse_snapshots=use_snapshots,
+        use_snapshots=use_snapshots,
     )
 
     assert isinstance(instance, lxd.LXDInstance)
@@ -51,26 +51,18 @@ def test_lxd_provider(lxc, project, alias, ephemeral, use_snapshots):
 
     assert proc.stdout == b"hi\n"
 
-    provider.teardown(clean=False)
-
-    assert instance.exists() is not ephemeral
-    assert instance.is_running() is False
-
-    provider.teardown(clean=True)
-
-    assert instance.exists() is False
-    assert instance.is_running() is False
-
 
 def test_incompatible_instance_compatibility_tag(
     lxc, project, instance_name, instance_launcher, tmp_path
 ):
     alias = BuilddImageAlias.XENIAL
+    provider = lxd.LXDProvider()
+
     instance_launcher(
         config_keys=dict(),
         instance_name=instance_name,
         image_remote="ubuntu",
-        image=str(alias.value),
+        image=alias.value,
         project=project,
         ephemeral=False,
     )
@@ -79,7 +71,7 @@ def test_incompatible_instance_compatibility_tag(
     test_file = tmp_path / "image.conf"
     test_file.write_text("compatibility_tag: craft-buildd-image-vX")
     lxc.file_push(
-        instance=instance_name,
+        instance_name=instance_name,
         project=project,
         source=test_file,
         destination=pathlib.Path("/etc/craft-image.conf"),
@@ -88,20 +80,15 @@ def test_incompatible_instance_compatibility_tag(
     image = BuilddImage(alias=alias)
 
     with pytest.raises(images.CompatibilityError) as exc_info:
-        provider = lxd.LXDProvider(
-            instance_name=instance_name,
-            image=image,
-            image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-            image_remote_name="ubuntu",
-            image_remote_protocol="simplestreams",
-            lxc=lxc,
-            ephemeral=False,
-            use_snapshots=False,
+        instance = provider.create_instance(
+            auto_clean=False,
+            name=instance_name,
+            image_configuration=image,
+            image_name=alias.value,
+            image_remote="ubuntu",
             project=project,
             remote="local",
-            auto_clean=False,
         )
-        provider.setup()
 
     assert (
         exc_info.value.reason
@@ -113,11 +100,13 @@ def test_incompatible_instance_os(
     lxc, project, instance_name, instance_launcher, tmp_path
 ):
     alias = BuilddImageAlias.XENIAL
+    provider = lxd.LXDProvider()
+
     instance_launcher(
         config_keys=dict(),
         instance_name=instance_name,
         image_remote="ubuntu",
-        image=str(alias.value),
+        image=alias.value,
         project=project,
         ephemeral=False,
     )
@@ -143,7 +132,7 @@ def test_incompatible_instance_os(
         )
     )
     lxc.file_push(
-        instance=instance_name,
+        instance_name=instance_name,
         project=project,
         source=test_file,
         destination=pathlib.Path("/etc/os-release"),
@@ -152,20 +141,15 @@ def test_incompatible_instance_os(
     image = BuilddImage(alias=alias)
 
     with pytest.raises(images.CompatibilityError) as exc_info:
-        provider = lxd.LXDProvider(
-            instance_name=instance_name,
-            image=image,
-            image_remote_addr="https://cloud-images.ubuntu.com/buildd/releases",
-            image_remote_name="ubuntu",
-            image_remote_protocol="simplestreams",
-            lxc=lxc,
-            ephemeral=False,
-            use_snapshots=False,
+        instance = provider.create_instance(
+            auto_clean=False,
+            name=instance_name,
+            image_configuration=image,
+            image_name=alias.value,
+            image_remote="ubuntu",
             project=project,
             remote="local",
-            auto_clean=False,
         )
-        provider.setup()
 
     assert (
         exc_info.value.reason == f"Expected OS version '{alias.value!s}', found '20.10'"

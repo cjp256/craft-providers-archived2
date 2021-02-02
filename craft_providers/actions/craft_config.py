@@ -15,23 +15,25 @@
 """Linux executor actions."""
 import logging
 import pathlib
-import shutil
 import subprocess
+from typing import Any, Dict, Optional
+
 import yaml
-from time import sleep
 
 from craft_providers import Executor
 
 logger = logging.getLogger(__name__)
 
 
+def load(*, executor: Executor, config_path: pathlib.Path) -> Optional[Dict[str, Any]]:
+    """Load craft configuration.
 
-def load_craft_config(
-        *, executor: Executor, config_path: pathlib.Path
-) -> Optional[Dict[str, Any]]:
+    :param executor: Executor for instance.
+    :param config_path: Path to configuration file.
+    """
     try:
         proc = executor.execute_run(
-            command=["cat", "/etc/craft-image.conf"],
+            command=["cat", str(config_path)],
             check=True,
             stdout=subprocess.PIPE,
         )
@@ -40,9 +42,18 @@ def load_craft_config(
 
     return yaml.load(proc.stdout, Loader=yaml.SafeLoader)
 
-def save_craft_config(*, executor: Executor, config: Dict[str, Any], config_path: pathlib.Path) -> None:
+
+def save(
+    *, executor: Executor, config: Dict[str, Any], config_path: pathlib.Path
+) -> None:
+    """Save craft image config.
+
+    :param executor: Executor for instance.
+    :param config: Configuration data to write.
+    :param config_path: Path to configuration file.
+    """
     executor.create_file(
-        destination=pathlib.Path("/etc/craft-image.conf"),
+        destination=config_path,
         content=yaml.dump(config).encode(),
         file_mode="0644",
     )

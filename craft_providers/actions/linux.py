@@ -17,7 +17,6 @@ import logging
 import pathlib
 import shutil
 import subprocess
-import yaml
 from time import sleep
 
 from craft_providers import Executor
@@ -126,6 +125,7 @@ def is_target_file(*, executor: Executor, target: pathlib.Path) -> bool:
     """
     proc = executor.execute_run(command=["test", "-f", target.as_posix()])
     return proc.returncode == 0
+
 
 def wait_for_system_ready(
     *, executor: Executor, retry_count=120, retry_interval: float = 0.5
