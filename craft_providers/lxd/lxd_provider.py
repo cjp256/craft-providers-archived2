@@ -225,6 +225,14 @@ class LXDProvider:
 
         lxc.project_create(project=name, remote=remote)
 
+        # Populate config from default profile.
+        default_cfg = lxc.profile_show(
+            profile="default", project="default", remote=remote
+        )
+        lxc.profile_edit(
+            profile="default", project=name, config=default_cfg, remote=remote
+        )
+
     def _get_lxc(self) -> LXC:
         """Get lxc client API.
 
