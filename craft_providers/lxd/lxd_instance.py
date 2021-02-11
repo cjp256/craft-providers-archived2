@@ -82,7 +82,7 @@ class LXDInstance(Executor):
         # We don't use gid/uid for file_push() in case we don't know the
         # user/group IDs in advance.  Just chown it.
         self.execute_run(
-            command=["sudo", "chown", f"{user}:{group}", destination.as_posix()],
+            command=["chown", f"{user}:{group}", destination.as_posix()],
         )
 
         os.unlink(temp_file.name)
