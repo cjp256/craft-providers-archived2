@@ -57,3 +57,16 @@ def save(
         content=yaml.dump(config).encode(),
         file_mode="0644",
     )
+
+
+def is_compatible(
+    *, executor: Executor, craft_config_path: pathlib.Path, compatibility_tag: str
+) -> None:
+    config = load(executor=executor, config_path=config_path)
+
+    # If no config has been written, assume it is compatible (likely an unfinished setup).
+    if config is None:
+        return
+
+    tag = config.get("compatibility_tag")
+    return tag == compatibility_tag

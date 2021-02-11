@@ -42,6 +42,13 @@ class Image(ABC):
         self.compatibility_tag: Final[str] = compatibility_tag
 
     @abstractmethod
+    def is_compatible(self, *, executor: Executor) -> None:
+        """Check if executor instance is compatible with image.
+
+        :param executor: Executor for t.
+        """
+
+    @abstractmethod
     def setup(self, *, executor: Executor) -> None:
         """Configure instance as necessary.
 
